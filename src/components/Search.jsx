@@ -1,34 +1,90 @@
+const TMDB_BASE_URL = "https://api.themoviedb.org/3";
+const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY;
+
 const Search = ({
   searchTerm,
   setSearchTerm,
   aiRecommendations,
   setAiRecommendations,
+  onAnimeSearch,
   onToggleFilter,
   isFilterOpen,
 }) => {
-
   const handleKeyDown = async (e) => {
-    if (e.key === "Enter" && searchTerm.trim() !== "") {
-      try {
-        const response = await fetch(
-          `http://127.0.0.1:8000/recommend/${encodeURIComponent(searchTerm)}`
-        );
+    if (e.key !== "Enter" || searchTerm.trim() === "") {
+      return;
+    }
 
-        const data = await response.json();
+    const animeTitle = searchTerm.trim();
 
-        console.log("AI Recommendations:", data.recommendations);
+    try {
+      console.log("Searching anime:", animeTitle);
 
+      // ==========================================
+      // 1. Try trained dataset first
+      // ==========================================
+
+      const response = await fetch(
+        `http://127.0.0.1:8000/recommend/${encodeURIComponent(
+          animeTitle
+        )}`
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to get AI recommendations");
+      }
+
+      const data = await response.json();
+
+      console.log("Dataset ML recommendations:", data.recommendations);
+
+      // ==========================================
+      // 2. Dataset anime found
+      // ==========================================
+
+      if (
+        data.recommendations &&
+        data.recommendations.length > 0
+      ) {
         setAiRecommendations(data.recommendations);
 
-      } catch (error) {
-        console.error("Error connecting to AI backend:", error);
-        alert("Could not connect to the AI recommendation backend.");
+        if (onAnimeSearch) {
+          onAnimeSearch(animeTitle);
+        }
+
+        return;
       }
+
+      // ==========================================
+      // 3. Anime not found in dataset
+      // ==========================================
+
+      console.log(
+        "Anime not found in ML dataset. TMDB fallback will be used."
+      );
+
+      // Clear old recommendations for now
+      setAiRecommendations([]);
+
+      if (onAnimeSearch) {
+        onAnimeSearch(animeTitle);
+      }
+
+    } catch (error) {
+      console.error(
+        "Error connecting to AI backend:",
+        error
+      );
+
+      alert(
+        "Could not connect to the AI recommendation backend."
+      );
     }
   };
 
   return (
     <div className="search flex items-center gap-4 w-full max-w-4xl">
+      {/* Search Input */}
       <div className="flex-1">
         <img src="search.svg" alt="search" />
 
@@ -41,13 +97,13 @@ const Search = ({
         />
       </div>
 
+      {/* Filter Button */}
       <button
         onClick={onToggleFilter}
-        className={`filter-btn p-3 rounded-xl transition-all border flex items-center justify-center gap-2 ${
-          isFilterOpen
+        className={`filter-btn p-3 rounded-xl transition-all border flex items-center justify-center gap-2 ${isFilterOpen
             ? "bg-pink-400 text-black border-pink-400"
             : "bg-[#1d1c22]/50 text-white border-white/10 hover:border-white/20"
-        }`}
+          }`}
         title="Toggle Filters"
       >
         <svg

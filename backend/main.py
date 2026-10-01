@@ -1,7 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
-from ml.recommender import get_recommendations
+from ml.recommender import (
+    get_recommendations,
+    get_recommendations_from_text
+)
 
 
 app = FastAPI()
@@ -89,5 +93,38 @@ def recommend(title: str):
     return {
         "input_anime": clean_title,
         "matched_dataset_title": dataset_title,
+        "recommendations": recommendations
+    }
+
+
+# ==========================================
+# External Anime Content Request
+# ==========================================
+
+class AnimeTextRequest(BaseModel):
+
+    title: str
+    genres: str = ""
+    overview: str = ""
+
+
+# ==========================================
+# Recommendation From External Content
+# ==========================================
+
+@app.post("/recommend-from-text")
+def recommend_from_text(request: AnimeTextRequest):
+
+    print("External anime:", request.title)
+
+    recommendations = get_recommendations_from_text(
+        anime_title=request.title,
+        genres=request.genres,
+        overview=request.overview,
+        number_of_recommendations=10
+    )
+
+    return {
+        "input_anime": request.title,
         "recommendations": recommendations
     }

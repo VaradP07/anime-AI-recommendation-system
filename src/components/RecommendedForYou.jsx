@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
+
 import { getDemographicRecommendations } from "../recommendationModel";
+
 import {
   getUserPrefs,
   updateMovieClickCount,
@@ -19,7 +21,7 @@ const API_OPTIONS = {
 
 const ML_API_BASE_URL = "http://127.0.0.1:8000";
 
-const RecommendedForYou = ({ user }) => {
+const RecommendedForYou = ({ user, selectedAnime }) => {
   // ==========================================
   // Existing Demographic Recommendations
   // ==========================================
@@ -135,11 +137,22 @@ const RecommendedForYou = ({ user }) => {
     const fetchMLRecommendations = async () => {
       if (!user) return;
 
+      // Wait until user searches/selects an anime
+      if (!selectedAnime || !selectedAnime.trim()) {
+        console.log(
+          "No anime selected yet for AI recommendations."
+        );
+
+        setMlRecommendations([]);
+        setMlLoading(false);
+
+        return;
+      }
+
       setMlLoading(true);
 
       try {
-        // Temporary test anime
-        const animeTitle = "Death Note";
+        const animeTitle = selectedAnime.trim();
 
         console.log(
           "Calling ML API for:",
@@ -181,7 +194,7 @@ const RecommendedForYou = ({ user }) => {
     };
 
     fetchMLRecommendations();
-  }, [user]);
+  }, [user, selectedAnime]);
 
   // ==========================================
   // OPEN AI RECOMMENDATION
@@ -263,11 +276,8 @@ const RecommendedForYou = ({ user }) => {
       {/* ===================================== */}
 
       <section className="recommended-for-you mb-12 relative animate-fade-in text-white">
-
         <div className="flex items-center justify-between mb-6 block w-full border-b border-white/10 pb-2 flex-wrap gap-4">
-
           <div className="flex items-center gap-3">
-
             <h2 className="section-title text-[#ffb5a7] font-bold text-2xl uppercase tracking-widest shrink-0">
               Recommended For You
             </h2>
@@ -275,12 +285,10 @@ const RecommendedForYou = ({ user }) => {
             <span className="bg-[#ffb5a7]/20 text-[#ffb5a7] text-xs font-bold px-2 py-1 rounded-sm tracking-widest uppercase mt-1 hidden md:block border border-[#ffb5a7]/30">
               Demographic Match Model Active
             </span>
-
           </div>
 
           {demographicName && (
             <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full scale-90 md:scale-100 origin-right">
-
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
 
               <span className="text-[10px] md:text-xs font-bold uppercase tracking-tighter text-gray-400">
@@ -289,38 +297,27 @@ const RecommendedForYou = ({ user }) => {
                   {demographicName} Match
                 </span>
               </span>
-
             </div>
           )}
-
         </div>
 
         {isLoading ? (
-
           <div className="flex gap-4 overflow-x-auto pb-4 pt-2">
-
             {[...Array(5)].map((_, i) => (
               <div
                 key={i}
                 className="w-[180px] h-[270px] bg-white/5 rounded-md shrink-0 animate-pulse border border-white/5"
               ></div>
             ))}
-
           </div>
-
         ) : recommendedMovies.length > 0 ? (
-
           <div className="relative overflow-hidden w-full group py-2">
-
             <ul className="flex gap-4 overflow-x-auto pb-4 snap-x no-scrollbar">
-
               {recommendedMovies.map((movieItem) => (
-
                 <li
                   key={movieItem.id}
                   className="relative shrink-0 snap-start w-[140px] md:w-[180px] group/item transition-transform hover:-translate-y-2"
                 >
-
                   <a
                     href={`/anime/${movieItem.id}`}
                     target="_blank"
@@ -330,7 +327,6 @@ const RecommendedForYou = ({ user }) => {
                       updateMovieClickCount(movieItem)
                     }
                   >
-
                     <img
                       src={
                         movieItem.poster_path
@@ -345,42 +341,29 @@ const RecommendedForYou = ({ user }) => {
                     />
 
                     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent opacity-0 group-hover/item:opacity-100 transition-opacity duration-300 flex items-end p-2">
-
                       <p className="text-white font-semibold text-xs truncate w-full">
                         {movieItem.title ||
                           movieItem.name}
                       </p>
-
                     </div>
 
                     <div className="absolute top-2 right-2 bg-pink-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded shadow-xl">
                       MATCH
                     </div>
-
                   </a>
-
                 </li>
-
               ))}
-
             </ul>
-
           </div>
-
         ) : (
-
           <div className="bg-white/5 rounded-xl p-8 border border-white/5 text-center">
-
             <p className="text-gray-400 text-sm">
-              Our Demographic Match Model
-              is ready. Browse more anime to
-              get personalized recommendations!
+              Our Demographic Match Model is ready.
+              Browse more anime to get personalized
+              recommendations!
             </p>
-
           </div>
-
         )}
-
       </section>
 
       {/* ===================================== */}
@@ -388,11 +371,7 @@ const RecommendedForYou = ({ user }) => {
       {/* ===================================== */}
 
       <section className="recommended-for-you mb-12 relative animate-fade-in text-white">
-
-        {/* AI Header */}
-
         <div className="flex items-center gap-3 mb-6 border-b border-white/10 pb-2">
-
           <h2 className="text-[#ffb5a7] font-bold text-2xl uppercase tracking-widest">
             AI Recommendations
           </h2>
@@ -400,47 +379,43 @@ const RecommendedForYou = ({ user }) => {
           <span className="bg-pink-500/20 text-pink-400 text-xs font-bold px-2 py-1 rounded border border-pink-500/30">
             TF-IDF + COSINE SIMILARITY
           </span>
-
         </div>
 
-        {/* Description */}
+        {selectedAnime && (
+          <p className="text-gray-400 text-sm mb-5">
+            Based on{" "}
+            <span className="text-pink-400 font-semibold">
+              {selectedAnime}
+            </span>
+          </p>
+        )}
 
-        <p className="text-gray-400 text-sm mb-5">
-          Recommendations generated using our
-          machine learning model based on anime
-          content similarity.
-        </p>
+        {!selectedAnime && (
+          <p className="text-gray-400 text-sm mb-5">
+            Search for an anime to get AI-powered
+            recommendations based on anime content
+            similarity.
+          </p>
+        )}
 
         {/* Loading */}
-
         {mlLoading ? (
-
           <div className="flex gap-4 overflow-x-auto pb-4">
-
             {[...Array(5)].map((_, index) => (
-
               <div
                 key={index}
                 className="w-[180px] h-[270px] bg-white/5 rounded-md shrink-0 animate-pulse border border-white/5"
               ></div>
-
             ))}
-
           </div>
-
         ) : mlRecommendations.length > 0 ? (
-
           <div className="relative overflow-hidden w-full">
-
             <ul className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
-
               {mlRecommendations.map((anime) => (
-
                 <li
                   key={anime.id}
                   className="relative shrink-0 w-[140px] md:w-[180px] group transition-transform hover:-translate-y-2"
                 >
-
                   <button
                     type="button"
                     onClick={() =>
@@ -448,9 +423,7 @@ const RecommendedForYou = ({ user }) => {
                     }
                     className="block w-full text-left overflow-hidden rounded-md relative shadow-lg cursor-pointer"
                   >
-
                     {/* Anime Image */}
-
                     <img
                       src={
                         anime.image ||
@@ -461,46 +434,30 @@ const RecommendedForYou = ({ user }) => {
                     />
 
                     {/* Anime Title */}
-
                     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-2">
-
                       <p className="text-white font-semibold text-xs truncate w-full">
                         {anime.title}
                       </p>
-
                     </div>
 
                     {/* Similarity */}
-
                     <div className="absolute top-2 right-2 bg-pink-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded shadow-xl">
-
-                      {(anime.similarity * 100).toFixed(1)}
-                      %
-
+                      {(anime.similarity * 100).toFixed(1)}%
                     </div>
-
                   </button>
-
                 </li>
-
               ))}
-
             </ul>
-
           </div>
-
         ) : (
-
           <div className="bg-white/5 rounded-xl p-8 border border-white/5 text-center">
-
             <p className="text-gray-400 text-sm">
-              No AI recommendations available.
+              {selectedAnime
+                ? "No AI recommendations available."
+                : "Search for an anime to get AI recommendations."}
             </p>
-
           </div>
-
         )}
-
       </section>
     </>
   );

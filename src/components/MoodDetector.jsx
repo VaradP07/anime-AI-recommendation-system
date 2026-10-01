@@ -15,20 +15,20 @@ const MoodDetector = ({ onMoodSelect, onClose }) => {
   const [selectedMood, setSelectedMood] = useState(null);
 
   const handleMoodClick = (mood) => {
-  const moodValue = mood.name.toLowerCase();
+    const moodValue = mood.name.toLowerCase();
 
-  setSelectedMood(mood.name);
+    setSelectedMood(mood.name);
 
-  if (onMoodSelect) {
-    console.log("Selected mood:", moodValue);
-    onMoodSelect(moodValue);
-  }
+    if (onMoodSelect) {
+      console.log("Selected mood:", moodValue);
+      onMoodSelect(moodValue);
+    }
 
-  // Close only the popup
-  if (onClose) {
-    onClose(false);
-  }
-};
+    // Close only the popup
+    if (onClose) {
+      onClose(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -72,11 +72,10 @@ const MoodDetector = ({ onMoodSelect, onClose }) => {
                 key={mood.name}
                 type="button"
                 onClick={() => handleMoodClick(mood)}
-                className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl transition-all duration-300 border ${
-                  selectedMood === mood.name
+                className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl transition-all duration-300 border ${selectedMood === mood.name
                     ? "bg-pink-500 border-pink-300 scale-105 shadow-lg"
                     : "bg-[#28262f] border-white/10 hover:bg-pink-500/20 hover:border-pink-400 hover:scale-105"
-                }`}
+                  }`}
               >
                 <span className="text-3xl">
                   {mood.emoji}

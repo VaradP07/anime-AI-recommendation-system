@@ -60,13 +60,14 @@ def get_recommendations(anime_title, number_of_recommendations=10):
         == anime_title.lower()
     ]
 
+    # Anime not found
     if matches.empty:
         return []
 
-    # Get index of selected anime
+    # Get index
     anime_index = matches.index[0]
 
-    # Get vector of selected anime
+    # Get vector
     anime_vector = anime_vectors[anime_index]
 
     # Calculate cosine similarity
@@ -80,10 +81,16 @@ def get_recommendations(anime_title, number_of_recommendations=10):
 
     recommendations = []
 
+    MIN_SIMILARITY = 0.30
+
     for index in similar_indices:
 
-        # Skip the selected anime itself
+        # Skip selected anime
         if index == anime_index:
+            continue
+
+        # Skip weak recommendations
+        if similarity_scores[index] < MIN_SIMILARITY:
             continue
 
         recommendations.append({
@@ -104,7 +111,69 @@ def get_recommendations(anime_title, number_of_recommendations=10):
 
 
 # ==========================================
-# 4. Test the model
+# 4. Unknown Anime Recommendation
+# ==========================================
+
+def get_recommendations_from_text(
+    anime_title,
+    genres="",
+    overview="",
+    number_of_recommendations=10
+):
+
+    # Create temporary content
+    combined_text = (
+        f"{genres} "
+        f"{genres} "
+        f"{overview}"
+    ).strip()
+
+    # If no information is available
+    if not combined_text:
+        return []
+
+    # Convert external anime content
+    query_vector = tfidf_vectorizer.transform(
+        [combined_text]
+    )
+
+    # Calculate similarity against dataset
+    similarity_scores = cosine_similarity(
+        query_vector,
+        anime_vectors
+    ).flatten()
+
+    # Sort by similarity
+    similar_indices = similarity_scores.argsort()[::-1]
+
+    recommendations = []
+
+    MIN_SIMILARITY = 0.30
+
+    for index in similar_indices:
+
+        if similarity_scores[index] < MIN_SIMILARITY:
+            continue
+
+        recommendations.append({
+            "id": int(anime_data.iloc[index]["id"]),
+            "title": anime_data.iloc[index]["title"],
+            "genres": anime_data.iloc[index]["genres"],
+            "image": anime_data.iloc[index]["image"],
+            "similarity": round(
+                float(similarity_scores[index]),
+                4
+            )
+        })
+
+        if len(recommendations) >= number_of_recommendations:
+            break
+
+    return recommendations
+
+
+# ==========================================
+# 5. Test the model
 # ==========================================
 
 if __name__ == "__main__":

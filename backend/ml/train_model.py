@@ -107,8 +107,12 @@ df["genres"] = df["genres"].str.lower()
 df["overview"] = df["overview"].str.lower()
 
 # Create a combined feature from genres and overview
+# Genres are repeated to give them stronger importance
+
 df["combined_features"] = (
-    df["genres"] + " " + df["overview"]
+    df["genres"] + " " +
+    df["genres"] + " " +
+    df["overview"]
 )
 
 # Remove unnecessary extra spaces
