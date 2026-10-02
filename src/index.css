@@ -297,3 +297,259 @@ body {
     opacity: 0.8;
   }
 }
+
+/* =========================================================
+   MOBILE RESPONSIVE FIX - ANIME HUB
+   ========================================================= */
+
+@media (max-width: 768px) {
+
+  /* ---------- Main Layout ---------- */
+
+  .anime-hub-container {
+    --sidebar-width: 64px !important;
+    width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .main-content {
+    width: calc(100% - 64px) !important;
+    min-width: 0 !important;
+    margin-left: 64px !important;
+    overflow-x: hidden !important;
+  }
+
+  .wrapper {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    box-sizing: border-box;
+  }
+
+
+  /* ---------- Search Area ---------- */
+
+  .top-search-bar {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-bottom: 24px !important;
+  }
+
+  .top-search-bar > div {
+    width: 100%;
+    min-width: 0;
+  }
+
+
+  /* ---------- Hero ---------- */
+
+  .spotlight-hero {
+    width: 100% !important;
+    height: 420px !important;
+    min-width: 0 !important;
+    margin-bottom: 28px !important;
+    border-radius: 18px !important;
+  }
+
+  .spotlight-bg img {
+    object-position: center center;
+  }
+
+  .spotlight-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 24px !important;
+    box-sizing: border-box;
+  }
+
+  .spotlight-title {
+    max-width: 100% !important;
+    font-size: 30px !important;
+    line-height: 1.08 !important;
+  }
+
+  .spotlight-desc {
+    max-width: 100% !important;
+    font-size: 13px !important;
+    line-height: 1.5 !important;
+    margin-bottom: 18px !important;
+  }
+
+  .spotlight-meta {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .spotlight-actions {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .watch-now-btn,
+  .detail-btn {
+    padding: 10px 16px !important;
+    font-size: 13px !important;
+  }
+
+
+  /* ---------- Hero Controls ---------- */
+
+  .spotlight-hero > .absolute.right-6 {
+    right: 12px !important;
+    bottom: 12px !important;
+  }
+
+  .spotlight-hero > .absolute.right-6 button {
+    width: 38px !important;
+    height: 38px !important;
+  }
+
+
+  /* ---------- AI Section ---------- */
+
+  .ai-recommendations,
+  .recommendations-section {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+
+  /* ---------- Cards ---------- */
+
+  .spotlight-hero,
+  .ai-recommendations,
+  .recommendations-section,
+  section {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+
+  /* ---------- Prevent Horizontal Overflow ---------- */
+
+  img,
+  video {
+    max-width: 100%;
+  }
+
+  h1,
+  h2,
+  h3,
+  p {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+}
+
+
+/* =========================================================
+   SMALL PHONES
+   ========================================================= */
+
+@media (max-width: 480px) {
+
+  .anime-hub-container {
+    --sidebar-width: 58px !important;
+  }
+
+  .main-content {
+    width: calc(100% - 58px) !important;
+    margin-left: 58px !important;
+  }
+
+  .wrapper {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  .spotlight-hero {
+    height: 390px !important;
+    border-radius: 16px !important;
+  }
+
+  .spotlight-content {
+    padding: 20px !important;
+    justify-content: flex-end !important;
+    padding-bottom: 58px !important;
+  }
+
+  .spotlight-title {
+    font-size: 25px !important;
+  }
+
+  .spotlight-desc {
+    font-size: 12px !important;
+    line-height: 1.45 !important;
+    -webkit-line-clamp: 3;
+  }
+
+  .spotlight-tag {
+    font-size: 11px !important;
+  }
+
+  .spotlight-actions {
+    gap: 7px !important;
+  }
+
+  .watch-now-btn,
+  .detail-btn {
+    padding: 9px 13px !important;
+    font-size: 12px !important;
+  }
+
+  .spotlight-hero > .absolute.right-6 {
+    right: 10px !important;
+    bottom: 10px !important;
+  }
+
+  .spotlight-hero > .absolute.right-6 button {
+    width: 34px !important;
+    height: 34px !important;
+  }
+}
+
+/* =========================================================
+   MOBILE AI CARD SIZE
+   ========================================================= */
+
+@media (max-width: 768px) {
+
+  /* AI recommendation card grid */
+  .ai-recommendations-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  /* AI recommendation cards */
+  .ai-recommendation-card {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .ai-recommendation-card img {
+    height: 190px !important;
+    object-fit: cover !important;
+  }
+}
+
+
+@media (max-width: 480px) {
+
+  .ai-recommendations-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .ai-recommendation-card img {
+    height: 155px !important;
+  }
+
+  .ai-recommendation-card {
+    border-radius: 12px !important;
+  }
+}

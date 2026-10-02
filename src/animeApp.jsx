@@ -15,11 +15,12 @@ import {
   getSavedMovies,
 } from "./firebase.js";
 import SaveMovieButton from "./components/SaveAnimeButton.jsx";
-import RecommendedForYou from "./components/RecommendedForYou.jsx";
 import "./animeApp.css";
 
 const API_BASE_URL = "https://api.themoviedb.org/3";
 const API_KEY = import.meta.env.VITE_TMDB_API_KEY;
+const ML_API_BASE_URL = "http://127.0.0.1:8000";
+const HOME_AI_TITLE = "Naruto";
 
 const API_OPTIONS = {
   method: "GET",
@@ -76,6 +77,211 @@ const SmallMovieCard = ({ movie }) => {
   );
 };
 
+const AIRecommendationCard = ({ anime, index, onSelect }) => {
+  const matchPercentage = Math.round((anime.similarity || 0) * 100);
+
+  const imageUrl =
+    anime.image ||
+    anime.poster_path ||
+    "/no-movie.png";
+
+  const genres = anime.genres
+    ? anime.genres
+      .split(",")
+      .map((genre) => genre.trim())
+      .filter(Boolean)
+      .slice(0, 3)
+    : [];
+
+  return (
+    <article
+      onClick={() => onSelect?.(anime)}
+      className="
+        group relative cursor-pointer
+        overflow-hidden rounded-md
+        bg-[#111014]
+        border border-white/10
+        transition-all duration-300
+        hover:-translate-y-1
+        hover:border-pink-400
+        hover:shadow-lg hover:shadow-pink-500/20
+      "
+    >
+      {/* ================= POSTER ================= */}
+      <div className="relative overflow-hidden">
+        <img
+          src={imageUrl}
+          alt={anime.title}
+          className="
+            w-full aspect-[2/3]
+            object-cover
+            transition-transform duration-300
+            group-hover:scale-105
+            group-hover:opacity-60
+          "
+          onError={(e) => {
+            e.currentTarget.src = "/no-movie.png";
+          }}
+        />
+
+        {/* ================= BOTTOM GRADIENT ================= */}
+        <div
+          className="
+            absolute bottom-0 left-0 right-0
+            h-32
+            bg-gradient-to-t
+            from-black
+            via-black/50
+            to-transparent
+          "
+        />
+
+        {/* ================= AI RANK ================= */}
+        <div className="absolute left-2 top-2">
+          <span
+            className="
+              flex h-8 min-w-8
+              items-center justify-center
+              rounded-full
+              bg-black/80
+              px-2
+              text-xs
+              font-black
+              text-white
+              backdrop-blur-md
+            "
+          >
+            #{index + 1}
+          </span>
+        </div>
+
+        {/* ================= AI BADGE ================= */}
+        <div className="absolute left-2 top-12">
+          <span
+            className="
+              rounded-full
+              bg-pink-500
+              px-2.5 py-1
+              text-[9px]
+              font-bold
+              text-white
+              shadow-lg
+            "
+          >
+            🤖 AI
+          </span>
+        </div>
+
+        {/* ================= MATCH ================= */}
+        <div
+          className="
+            absolute right-2 top-2
+            flex h-11 w-11
+            items-center justify-center
+            rounded-full
+            border-2 border-pink-400
+            bg-black/80
+            backdrop-blur-md
+          "
+        >
+          <div className="text-center">
+            <div className="text-[11px] font-black text-pink-300">
+              {matchPercentage}%
+            </div>
+
+            <div className="text-[7px] uppercase text-gray-400">
+              Match
+            </div>
+          </div>
+        </div>
+
+        {/* ================= HOVER EXPLORE ================= */}
+        <div
+          className="
+            absolute bottom-2 left-2 right-2
+            rounded-md
+            bg-pink-500
+            px-2 py-2
+            text-center
+            text-[10px]
+            font-bold
+            text-white
+            opacity-0
+            transition-opacity duration-300
+            group-hover:opacity-100
+          "
+        >
+          Explore Anime →
+        </div>
+      </div>
+
+      {/* ================= CARD CONTENT ================= */}
+      <div className="p-3">
+        {/* TITLE */}
+        <h3
+          className="
+            truncate
+            text-sm
+            font-bold
+            text-white
+            group-hover:text-pink-400
+            transition-colors
+          "
+          title={anime.title}
+        >
+          {anime.title}
+        </h3>
+
+        {/* GENRES */}
+        <div className="mt-3 flex gap-1.5 overflow-hidden">
+          {genres.length > 0 ? (
+            genres.map((genre) => (
+              <span
+                key={genre}
+                className="
+                  shrink-0
+                  rounded-md
+                  border border-white/10
+                  bg-white/5
+                  px-2 py-1
+                  text-[8px]
+                  text-gray-400
+                "
+              >
+                {genre}
+              </span>
+            ))
+          ) : (
+            <span
+              className="
+                rounded-md
+                border border-white/10
+                bg-white/5
+                px-2 py-1
+                text-[8px]
+                text-gray-400
+              "
+            >
+              Anime
+            </span>
+          )}
+        </div>
+
+        {/* ================= BOTTOM INFO ================= */}
+        <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-2">
+          <span className="text-[10px] font-bold text-yellow-400">
+            ★ {matchPercentage}%
+          </span>
+
+          <span className="text-[8px] font-semibold uppercase tracking-wide text-gray-600">
+            AI Match
+          </span>
+        </div>
+      </div>
+    </article>
+  );
+};
+
 const AnimeApp = ({ user, setUser }) => {
   const mainContentRef = useRef(null);
   const [activeView, setActiveView] = useState("discover"); // "discover" or "profile"
@@ -84,6 +290,11 @@ const AnimeApp = ({ user, setUser }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [aiRecommendations, setAiRecommendations] = useState([]);
   const [selectedAnime, setSelectedAnime] = useState("");
+
+  // Home-page AI recommendations use the same trained ML model.
+  const [homeAIRecommendations, setHomeAIRecommendations] = useState([]);
+  const [homeAILoading, setHomeAILoading] = useState(true);
+  const [homeAIError, setHomeAIError] = useState("");
   const [selectedMood, setSelectedMood] = useState("");
   const [isMoodOpen, setIsMoodOpen] = useState(false);
 
@@ -455,6 +666,37 @@ const AnimeApp = ({ user, setUser }) => {
     );
   };
 
+  // ================= HOME AI RECOMMENDATIONS =================
+  // This is independent from the search AI flow.
+  useEffect(() => {
+    const loadHomeAIRecommendations = async () => {
+      try {
+        setHomeAILoading(true);
+        setHomeAIError("");
+
+        const response = await fetch(
+          `${ML_API_BASE_URL}/recommend/${encodeURIComponent(HOME_AI_TITLE)}`
+        );
+
+        if (!response.ok) {
+          throw new Error("Home AI API request failed");
+        }
+
+        const data = await response.json();
+
+        setHomeAIRecommendations(data.recommendations || []);
+      } catch (error) {
+        console.error("Home AI recommendation error:", error);
+        setHomeAIRecommendations([]);
+        setHomeAIError("AI recommendations are temporarily unavailable.");
+      } finally {
+        setHomeAILoading(false);
+      }
+    };
+
+    loadHomeAIRecommendations();
+  }, []);
+
   useEffect(() => {
     loadTrendingMovies();
     loadProfilePrefs();
@@ -656,360 +898,75 @@ const AnimeApp = ({ user, setUser }) => {
 
                   {aiRecommendations.length > 0 && (
                     <section className="mt-12 mb-14">
+                      <div className="relative mb-8 overflow-hidden rounded-2xl border border-pink-500/20 bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-transparent p-6">
+                        <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-pink-500/20 blur-3xl" />
+                        <div className="pointer-events-none absolute -bottom-10 -left-10 h-24 w-24 rounded-full bg-purple-500/20 blur-3xl" />
 
-                      {/* ================= AI SECTION HEADER ================= */}
-                      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-7">
+                        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <div className="mb-3 flex items-center gap-3">
+                              <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-pink-500/20 bg-pink-500/15 text-xl shadow-lg shadow-pink-500/10">
+                                🤖
+                              </div>
 
-                        <div>
-                          {/* AI Badge */}
-                          <div className="inline-flex items-center gap-2 px-3 py-1.5 mb-3 rounded-full bg-pink-500/10 border border-pink-500/20">
-                            <span className="text-sm">🤖</span>
-                            <span className="text-xs font-semibold tracking-wide text-pink-400 uppercase">
-                              AI Powered
-                            </span>
+                              <div>
+                                <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-pink-400">
+                                  AI Powered
+                                </p>
+
+                                <h2 className="text-2xl font-bold text-white sm:text-3xl">
+                                  Recommended For You
+                                </h2>
+                              </div>
+                            </div>
+
+                            <p className="max-w-2xl text-sm leading-relaxed text-gray-400">
+                              Discover anime selected by our content-based
+                              recommendation engine using TF-IDF and cosine similarity.
+                            </p>
+
+                            {selectedAnime && (
+                              <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-4 py-2 backdrop-blur-md">
+                                <span className="text-xs text-gray-500">
+                                  Based on
+                                </span>
+                                <span className="text-sm font-semibold text-pink-400">
+                                  {selectedAnime}
+                                </span>
+                              </div>
+                            )}
                           </div>
 
-                          {/* Title */}
-                          <h2 className="text-3xl md:text-4xl font-bold text-white">
-                            Recommended For You
-                          </h2>
+                          <div className="flex shrink-0 items-center gap-2 self-start rounded-full border border-green-400/20 bg-green-400/5 px-4 py-2 backdrop-blur-md">
+                            <span className="relative flex h-2.5 w-2.5">
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-50" />
+                              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-400" />
+                            </span>
 
-                          {/* Description */}
-                          <p className="text-gray-400 mt-2 text-sm md:text-base">
-                            Anime recommendations generated using content similarity.
-                          </p>
-
-                          {/* Selected Anime */}
-                          {selectedAnime && (
-                            <p className="text-gray-400 text-sm mt-2">
-                              Based on{" "}
-                              <span className="text-pink-400 font-semibold">
-                                {selectedAnime}
-                              </span>
-                            </p>
-                          )}
+                            <span className="text-xs font-semibold text-green-400">
+                              AI Engine Active
+                            </span>
+                          </div>
                         </div>
-
-                        {/* AI Status */}
-                        <div className="flex items-center gap-2 text-xs text-gray-400">
-                          <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-                          AI Recommendation Engine Active
-                        </div>
-
                       </div>
 
-
-                      {/* ================= AI CARDS ================= */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
-
-                        {aiRecommendations.map((anime, index) => {
-
-                          const matchPercentage = Math.round(
-                            (anime.similarity || 0) * 100
-                          );
-
-                          return (
-                            <button
-                              type="button"
-                              key={anime.id || index}
-                              onClick={() => {
-                                setAiRecommendations([]);
-                                setSearchTerm(anime.title);
-                                setSelectedAnime(anime.title);
-
-                                window.scrollTo({
-                                  top: 0,
-                                  behavior: "smooth",
-                                });
-                              }}
-                              className="
-              group
-              text-left
-              relative
-              overflow-hidden
-              rounded-2xl
-              bg-[#15141a]
-              border border-white/10
-              cursor-pointer
-              transition-all
-              duration-500
-              hover:-translate-y-2
-              hover:border-pink-500/50
-              hover:shadow-[0_15px_45px_rgba(236,72,153,0.18)]
-            "
-                            >
-
-                              {/* ================= POSTER ================= */}
-                              <div className="relative h-80 overflow-hidden">
-
-                                <img
-                                  src={anime.image || "/no-movie.png"}
-                                  alt={anime.title}
-                                  className="
-                  w-full
-                  h-full
-                  object-cover
-                  transition-transform
-                  duration-700
-                  group-hover:scale-110
-                "
-                                />
-
-                                {/* Dark Gradient */}
-                                <div className="
-                absolute
-                inset-0
-                bg-gradient-to-t
-                from-[#15141a]
-                via-transparent
-                to-transparent
-                opacity-90
-              " />
-
-                                {/* AI Ranking Badge */}
-                                <div className="
-  absolute
-  top-3
-  left-3
-  flex
-  items-center
-  gap-2
-  px-3
-  py-1.5
-  rounded-full
-  bg-black/75
-  backdrop-blur-md
-  border
-  border-pink-400/30
-  shadow-lg
-">
-                                  <span className="text-yellow-400 font-bold text-xs">
-                                    #{index + 1}
-                                  </span>
-
-                                  <span className="text-pink-400 text-xs font-semibold">
-                                    🤖 AI Pick
-                                  </span>
-                                </div>
-
-
-                                {/* Circular AI Match Score */}
-                                <div className="
-  absolute
-  top-3
-  right-3
-  w-16
-  h-16
-  rounded-full
-  bg-black/80
-  backdrop-blur-md
-  border
-  border-white/10
-  flex
-  items-center
-  justify-center
-  shadow-lg
-">
-                                  {/* Progress Ring */}
-                                  <div
-                                    className="
-      absolute
-      inset-1
-      rounded-full
-    "
-                                    style={{
-                                      background: `conic-gradient(
-        #ec4899 ${matchPercentage * 3.6}deg,
-        rgba(255,255,255,0.08) ${matchPercentage * 3.6}deg
-      )`,
-                                    }}
-                                  />
-
-                                  {/* Inner Circle */}
-                                  <div className="
-    relative
-    w-[52px]
-    h-[52px]
-    rounded-full
-    bg-[#15141a]
-    flex
-    flex-col
-    items-center
-    justify-center
-  ">
-                                    <span className="text-yellow-400 text-sm font-bold leading-none">
-                                      {matchPercentage}%
-                                    </span>
-
-                                    <span className="text-[8px] text-gray-500 mt-1 font-semibold tracking-wide">
-                                      MATCH
-                                    </span>
-                                  </div>
-                                </div>
-
-
-                                {/* Hover Explore */}
-                                <div className="
-                absolute
-                inset-0
-                flex
-                items-center
-                justify-center
-                opacity-0
-                group-hover:opacity-100
-                transition-opacity
-                duration-300
-              ">
-                                  <span className="
-                  px-4
-                  py-2
-                  rounded-full
-                  bg-pink-500
-                  text-white
-                  text-sm
-                  font-semibold
-                  shadow-lg
-                ">
-                                    Explore Anime →
-                                  </span>
-                                </div>
-
-                              </div>
-
-
-                              {/* ================= CARD CONTENT ================= */}
-                              <div className="p-4">
-
-                                {/* Title */}
-                                <h3 className="
-                text-lg
-                font-bold
-                text-white
-                line-clamp-2
-                min-h-[56px]
-                group-hover:text-pink-400
-                transition-colors
-                duration-300
-              ">
-                                  {anime.title}
-                                </h3>
-
-
-                                {/* Genres */}
-                                <div className="mt-3 flex flex-wrap gap-1.5">
-                                  {anime.genres
-                                    ? anime.genres
-                                      .split(",")
-                                      .slice(0, 3)
-                                      .map((genre, genreIndex) => (
-                                        <span
-                                          key={genreIndex}
-                                          className="
-                            px-2
-                            py-1
-                            rounded-md
-                            bg-white/5
-                            border
-                            border-white/10
-                            text-[10px]
-                            text-gray-400
-                          "
-                                        >
-                                          {genre.trim()}
-                                        </span>
-                                      ))
-                                    : (
-                                      <span className="text-xs text-gray-500">
-                                        Anime
-                                      </span>
-                                    )}
-                                </div>
-
-
-                                {/* AI Match Score */}
-                                <div className="mt-4 flex items-center justify-between">
-                                  <span className="text-yellow-400 font-semibold text-sm">
-                                    ⭐ {matchPercentage}% Match
-                                  </span>
-
-                                  <span className="text-xs text-gray-500">
-                                    AI Score
-                                  </span>
-                                </div>
-
-                                {/* Why This Recommendation */}
-                                <div className="
-  mt-4
-  p-3
-  rounded-xl
-  bg-purple-500/5
-  border
-  border-purple-500/10
-">
-                                  <p className="text-xs text-purple-400 font-semibold mb-2">
-                                    ✨ Why recommended?
-                                  </p>
-
-                                  <p className="text-xs text-gray-400 leading-relaxed">
-                                    Recommended based on{" "}
-                                    <span className="text-pink-400 font-semibold">
-                                      {selectedAnime || "your search"}
-                                    </span>{" "}
-                                    with{" "}
-                                    <span className="text-yellow-400 font-semibold">
-                                      {matchPercentage}% content similarity
-                                    </span>
-                                    .
-                                  </p>
-
-                                  {anime.genres && (
-                                    <p className="text-[11px] text-gray-500 mt-2">
-                                      Related themes:{" "}
-                                      <span className="text-gray-400">
-                                        {anime.genres
-                                          .split(",")
-                                          .slice(0, 2)
-                                          .map((genre) => genre.trim())
-                                          .join(" & ")}
-                                      </span>
-                                    </p>
-                                  )}
-                                </div>
-
-                                {/* Bottom Action */}
-                                <div className="
-  flex
-  items-center
-  justify-between
-  mt-5
-  pt-3
-  border-t
-  border-white/5
-">
-                                  <span className="text-xs text-gray-500">
-                                    Content Based AI
-                                  </span>
-
-                                  <span className="
-    text-pink-400
-    text-sm
-    font-semibold
-    transition-transform
-    duration-300
-    group-hover:translate-x-1
-  ">
-                                    →
-                                  </span>
-                                </div>
-
-                              </div>
-
-                            </button>
-                          );
-                        })}
-
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                        {aiRecommendations.slice(0, 10).map((anime, index) => (
+                          <AIRecommendationCard
+                            key={`${anime.id}-${anime.title}`}
+                            anime={anime}
+                            index={index}
+                            onSelect={(selected) => {
+                              setSearchTerm(selected.title);
+                              setSelectedAnime(selected.title);
+                              window.scrollTo({
+                                top: 0,
+                                behavior: "smooth",
+                              });
+                            }}
+                          />
+                        ))}
                       </div>
-
                     </section>
                   )}
 
@@ -1064,8 +1021,11 @@ const AnimeApp = ({ user, setUser }) => {
 
               {/* Spotlight / Hero */}
               {!debouncedSearchTerm && movieList.length > 0 && (
-                <section className="spotlight-hero shrink-0 relative w-full rounded-2xl overflow-hidden mb-12 h-[300px] md:h-[450px]">
-                  <div className="spotlight-bg absolute inset-0 transition-opacity duration-500">
+                <section className="group relative mb-12 h-[340px] w-full shrink-0 overflow-hidden rounded-3xl border border-white/10 bg-[#0b0b0f] shadow-2xl md:h-[480px]">
+
+                  {/* ================= BACKGROUND IMAGE ================= */}
+                  <div className="absolute inset-0">
+
                     <img
                       key={movieList[currentSpotlightIndex].id}
                       src={
@@ -1073,74 +1033,307 @@ const AnimeApp = ({ user, setUser }) => {
                           ? `https://image.tmdb.org/t/p/original${movieList[currentSpotlightIndex].backdrop_path}`
                           : "/hero-bg.png"
                       }
-                      alt={movieList[currentSpotlightIndex].title}
-                      className="w-full h-full object-cover animate-fade-in"
+                      alt={
+                        movieList[currentSpotlightIndex].title ||
+                        movieList[currentSpotlightIndex].name
+                      }
+                      className="
+        h-full
+        w-full
+        object-cover
+        object-center
+        transition-transform
+        duration-[1200ms]
+        ease-out
+        group-hover:scale-[1.03]
+      "
                     />
-                    <div className="spotlight-overlay absolute inset-0 bg-gradient-to-r from-[#17161b] via-[#17161b]/90 to-transparent"></div>
-                    <div className="spotlight-overlay-bottom absolute inset-0 bg-gradient-to-t from-[#121115] via-transparent to-transparent"></div>
+
+                    {/* Left cinematic gradient */}
+                    <div className="
+      absolute
+      inset-0
+      bg-gradient-to-r
+      from-[#08080c]
+      via-[#08080c]/85
+      via-45%
+      to-transparent
+    " />
+
+                    {/* Bottom gradient */}
+                    <div className="
+      absolute
+      inset-0
+      bg-gradient-to-t
+      from-[#08080c]
+      via-transparent
+      to-transparent
+    " />
+
+                    {/* Subtle pink glow */}
+                    <div className="
+      pointer-events-none
+      absolute
+      -bottom-24
+      -left-20
+      h-72
+      w-72
+      rounded-full
+      bg-pink-500/10
+      blur-3xl
+    " />
+
                   </div>
+
+
+                  {/* ================= HERO CONTENT ================= */}
                   <div
-                    className="spotlight-content relative z-10 p-6 md:p-12 md:max-w-2xl flex flex-col justify-center h-full animate-slide-up"
                     key={`content-${movieList[currentSpotlightIndex].id}`}
+                    className="
+      relative
+      z-10
+      flex
+      h-full
+      max-w-3xl
+      flex-col
+      justify-center
+      px-6
+      py-8
+      md:px-12
+      md:py-12
+    "
                   >
-                    <span className="spotlight-tag text-pink-400 font-semibold mb-2 text-sm md:text-base">
-                      #{currentSpotlightIndex + 1} Spotlight
-                    </span>
-                    <h1 className="spotlight-title text-3xl md:text-5xl font-bold text-white mb-4 line-clamp-2 leading-tight">
+
+                    {/* Spotlight Badge */}
+                    <div className="mb-4 flex items-center gap-3">
+
+                      <span className="
+        inline-flex
+        items-center
+        rounded-full
+        border
+        border-pink-400/20
+        bg-pink-400/10
+        px-3
+        py-1.5
+        text-xs
+        font-bold
+        uppercase
+        tracking-[0.15em]
+        text-pink-400
+        backdrop-blur-md
+      ">
+                        # {currentSpotlightIndex + 1} Spotlight
+                      </span>
+
+                      <span className="
+        h-1
+        w-1
+        rounded-full
+        bg-white/30
+      " />
+
+                      <span className="
+        text-xs
+        font-medium
+        text-gray-400
+      ">
+                        Featured Anime
+                      </span>
+
+                    </div>
+
+
+                    {/* ================= TITLE ================= */}
+                    <h1 className="
+      max-w-2xl
+      text-3xl
+      font-extrabold
+      leading-[1.05]
+      tracking-tight
+      text-white
+      drop-shadow-2xl
+      sm:text-4xl
+      md:text-5xl
+      lg:text-6xl
+    ">
                       {movieList[currentSpotlightIndex].title ||
                         movieList[currentSpotlightIndex].name}
                     </h1>
-                    <div className="spotlight-meta flex items-center gap-4 text-xs md:text-sm text-gray-300 font-medium mb-4">
-                      <span className="flex items-center gap-1">
-                        <i className="fas fa-play-circle"></i> TV
+
+
+                    {/* ================= META ================= */}
+                    <div className="
+      mt-5
+      flex
+      flex-wrap
+      items-center
+      gap-2
+      text-xs
+      font-medium
+      text-gray-300
+      md:gap-3
+      md:text-sm
+    ">
+
+                      <span className="
+        rounded-full
+        border
+        border-white/10
+        bg-white/5
+        px-3
+        py-1.5
+        backdrop-blur-md
+      ">
+                        TV
                       </span>
-                      <span className="flex items-center gap-1">
-                        <i className="fas fa-clock"></i> 24m
+
+                      <span className="
+        rounded-full
+        border
+        border-white/10
+        bg-white/5
+        px-3
+        py-1.5
+        backdrop-blur-md
+      ">
+                        24m
                       </span>
-                      <span className="flex items-center gap-1">
-                        <i className="fas fa-calendar"></i>{" "}
-                        {movieList[currentSpotlightIndex].release_date ||
-                          "Unknown"}
+
+                      <span className="
+        rounded-full
+        border
+        border-white/10
+        bg-white/5
+        px-3
+        py-1.5
+        backdrop-blur-md
+      ">
+                        {movieList[currentSpotlightIndex].release_date || "Unknown"}
                       </span>
-                      <span className="quality-tag bg-white text-black px-1.5 py-0.5 rounded font-bold text-[10px]">
+
+                      <span className="
+        rounded-full
+        bg-white
+        px-2.5
+        py-1
+        text-[10px]
+        font-extrabold
+        text-black
+      ">
                         HD
                       </span>
+
                     </div>
-                    <p className="spotlight-desc text-sm md:text-base text-gray-400 line-clamp-3 mb-6">
+
+
+                    {/* ================= DESCRIPTION ================= */}
+                    <p className="
+      mt-5
+      max-w-2xl
+      line-clamp-3
+      text-sm
+      leading-6
+      text-gray-400
+      md:text-base
+      md:leading-7
+    ">
                       {movieList[currentSpotlightIndex].overview}
                     </p>
-                    <div className="spotlight-actions flex items-center gap-4">
+
+
+                    {/* ================= BUTTONS ================= */}
+                    <div className="
+      mt-7
+      flex
+      flex-wrap
+      items-center
+      gap-3
+    ">
+
+                      {/* Watch Now */}
                       <a
                         href={`/anime/${movieList[currentSpotlightIndex].id}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="watch-now-btn bg-pink-400 hover:bg-pink-500 text-black px-6 py-3 rounded-full font-bold flex items-center gap-2 transition cursor-pointer"
                         onClick={() =>
                           updateMovieClickCount(
                             movieList[currentSpotlightIndex],
                           )
                         }
+                        className="
+          group/watch
+          inline-flex
+          items-center
+          gap-2.5
+          rounded-full
+          bg-pink-400
+          px-6
+          py-3.5
+          text-sm
+          font-bold
+          text-black
+          shadow-[0_10px_35px_rgba(244,114,182,0.25)]
+          transition-all
+          duration-300
+          hover:scale-105
+          hover:bg-pink-300
+          hover:shadow-[0_12px_40px_rgba(244,114,182,0.4)]
+        "
                       >
+
                         <svg
                           viewBox="0 0 24 24"
                           fill="currentColor"
-                          className="w-5 h-5"
+                          className="
+            h-5
+            w-5
+            transition-transform
+            duration-300
+            group-hover/watch:scale-110
+          "
                         >
                           <path d="M8 5v14l11-7z" />
                         </svg>
+
                         Watch Now
+
                       </a>
+
+
+                      {/* Detail */}
                       <a
                         href={`/anime/${movieList[currentSpotlightIndex].id}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="detail-btn bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-full font-bold flex items-center gap-2 transition"
+                        className="
+          inline-flex
+          items-center
+          gap-2
+          rounded-full
+          border
+          border-white/10
+          bg-white/10
+          px-6
+          py-3.5
+          text-sm
+          font-bold
+          text-white
+          backdrop-blur-md
+          transition-all
+          duration-300
+          hover:scale-105
+          hover:border-white/20
+          hover:bg-white/15
+        "
                       >
-                        Detail{" "}
+
+                        Detail
+
                         <svg
                           viewBox="0 0 24 24"
                           fill="none"
-                          className="w-4 h-4"
+                          className="h-4 w-4"
                         >
                           <path
                             d="M9 5l7 7-7 7"
@@ -1150,17 +1343,57 @@ const AnimeApp = ({ user, setUser }) => {
                             strokeLinejoin="round"
                           />
                         </svg>
+
                       </a>
+
                     </div>
+
                   </div>
 
-                  {/* Manual Controls */}
-                  <div className="absolute right-6 bottom-6 z-20 flex flex-col md:flex-row items-center gap-2">
+
+                  {/* ================= SLIDER CONTROLS ================= */}
+                  <div className="
+    absolute
+    bottom-5
+    right-5
+    z-20
+    flex
+    items-center
+    gap-2
+    md:bottom-7
+    md:right-7
+  ">
+
+                    {/* Previous */}
                     <button
+                      type="button"
                       onClick={handleSpotlightPrev}
-                      className="w-10 h-10 bg-black/50 hover:bg-white hover:text-black hover:scale-110 text-white backdrop-blur-md rounded flex items-center justify-center transition border border-white/10"
+                      aria-label="Previous spotlight"
+                      className="
+        flex
+        h-11
+        w-11
+        items-center
+        justify-center
+        rounded-xl
+        border
+        border-white/10
+        bg-black/50
+        text-white
+        backdrop-blur-md
+        transition-all
+        duration-300
+        hover:scale-105
+        hover:border-pink-400/30
+        hover:bg-pink-400
+        hover:text-black
+      "
                     >
-                      <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        className="h-5 w-5"
+                      >
                         <path
                           d="M15 19l-7-7 7-7"
                           stroke="currentColor"
@@ -1170,11 +1403,38 @@ const AnimeApp = ({ user, setUser }) => {
                         />
                       </svg>
                     </button>
+
+
+                    {/* Next */}
                     <button
+                      type="button"
                       onClick={handleSpotlightNext}
-                      className="w-10 h-10 bg-black/50 hover:bg-white hover:text-black hover:scale-110 text-white backdrop-blur-md rounded flex items-center justify-center transition border border-white/10"
+                      aria-label="Next spotlight"
+                      className="
+        flex
+        h-11
+        w-11
+        items-center
+        justify-center
+        rounded-xl
+        border
+        border-white/10
+        bg-black/50
+        text-white
+        backdrop-blur-md
+        transition-all
+        duration-300
+        hover:scale-105
+        hover:border-pink-400/30
+        hover:bg-pink-400
+        hover:text-black
+      "
                     >
-                      <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        className="h-5 w-5"
+                      >
                         <path
                           d="M9 5l7 7-7 7"
                           stroke="currentColor"
@@ -1184,16 +1444,143 @@ const AnimeApp = ({ user, setUser }) => {
                         />
                       </svg>
                     </button>
+
                   </div>
+
+
+                  {/* ================= SLIDE INDICATOR ================= */}
+                  <div className="
+    absolute
+    bottom-7
+    left-6
+    z-20
+    hidden
+    items-center
+    gap-1.5
+    md:left-12
+    md:flex
+  ">
+
+                    {movieList.slice(0, Math.min(movieList.length, 5)).map((_, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => setCurrentSpotlightIndex(index)}
+                        aria-label={`Go to spotlight ${index + 1}`}
+                        className={`
+          h-1.5
+          rounded-full
+          transition-all
+          duration-300
+          ${index === currentSpotlightIndex
+                            ? "w-8 bg-pink-400"
+                            : "w-2 bg-white/30 hover:bg-white/60"
+                          }
+        `}
+                      />
+                    ))}
+
+                  </div>
+
                 </section>
               )}
 
-              {/* Demographic Recommendations */}
-              {!debouncedSearchTerm && user && (
-                <RecommendedForYou
-                  user={user}
-                  selectedAnime={selectedAnime}
-                />
+              {/* ================= HOME AI RECOMMENDATIONS ================= */}
+              {!debouncedSearchTerm && (
+                <section className="mb-14">
+                  <div className="relative overflow-hidden rounded-2xl border border-pink-500/20 bg-gradient-to-r from-[#17101c] via-[#120f18] to-[#0b0b0e] p-6 md:p-7">
+                    <div className="pointer-events-none absolute -right-20 -top-20 h-52 w-52 rounded-full bg-pink-500/15 blur-3xl" />
+                    <div className="pointer-events-none absolute -bottom-20 -left-20 h-52 w-52 rounded-full bg-purple-500/15 blur-3xl" />
+
+                    <div className="relative flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <div className="mb-3 flex items-center gap-3">
+                          <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-pink-500/20 bg-pink-500/10 text-xl shadow-lg shadow-pink-500/10">
+                            🤖
+                          </div>
+
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-pink-400">
+                              AI Powered
+                            </p>
+
+                            <h2 className="text-2xl font-bold text-white md:text-3xl">
+                              Recommended For You
+                            </h2>
+                          </div>
+                        </div>
+
+                        <p className="max-w-2xl text-sm leading-relaxed text-gray-400">
+                          Discover anime selected by our content-based AI engine
+                          using TF-IDF and cosine similarity.
+                        </p>
+
+                        <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-4 py-2 backdrop-blur-md">
+                          <span className="text-xs text-gray-500">
+                            AI starting point
+                          </span>
+
+                          <span className="text-sm font-semibold text-pink-400">
+                            {HOME_AI_TITLE}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex shrink-0 items-center gap-2 self-start rounded-full border border-green-400/20 bg-green-400/5 px-4 py-2 backdrop-blur-md">
+                        <span className="relative flex h-2.5 w-2.5">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-50" />
+                          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-400" />
+                        </span>
+
+                        <span className="text-xs font-semibold text-green-400">
+                          AI Engine Active
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {homeAILoading ? (
+                    <div className="mt-6 flex min-h-[180px] items-center justify-center rounded-2xl border border-white/10 bg-[#111014]">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="h-8 w-8 animate-spin rounded-full border-2 border-pink-400/20 border-t-pink-400" />
+                        <p className="text-sm text-gray-400">
+                          Generating AI recommendations...
+                        </p>
+                      </div>
+                    </div>
+                  ) : homeAIError ? (
+                    <div className="mt-6 rounded-2xl border border-red-400/20 bg-red-400/5 p-6 text-center">
+                      <p className="text-sm text-red-300">{homeAIError}</p>
+                      <p className="mt-2 text-xs text-gray-500">
+                        Start the FastAPI ML server to display recommendations.
+                      </p>
+                    </div>
+                  ) : homeAIRecommendations.length > 0 ? (
+                    <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                      {homeAIRecommendations.slice(0, 5).map((anime, index) => (
+                        <AIRecommendationCard
+                          key={`home-${anime.id}-${anime.title}`}
+                          anime={anime}
+                          index={index}
+                          onSelect={(selected) => {
+                            setSearchTerm(selected.title);
+                            setSelectedAnime(selected.title);
+                            window.scrollTo({
+                              top: 0,
+                              behavior: "smooth",
+                            });
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-6 rounded-2xl border border-white/10 bg-[#111014] p-8 text-center">
+                      <p className="text-sm text-gray-400">
+                        No AI recommendations are available right now.
+                      </p>
+                    </div>
+                  )}
+                </section>
               )}
 
               {trendingMovies.length > 0 && !debouncedSearchTerm && (
@@ -1738,3 +2125,4 @@ const AnimeApp = ({ user, setUser }) => {
 };
 
 export default AnimeApp;
+
