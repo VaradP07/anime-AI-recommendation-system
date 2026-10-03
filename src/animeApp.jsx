@@ -599,41 +599,81 @@ const AnimeApp = ({ user, setUser }) => {
 
   const loadSavedMoviesData = async () => {
     setIsLoadingSaved(true);
+
     try {
       const ids = await getSavedMovies();
 
       console.log("ALL SAVED IDS:", ids);
 
-      // Remove invalid TMDB movie ID
+      // Remove invalid TMDB ID
       const validIds = ids.filter(
         (movieId) => String(movieId) !== "154526"
       );
 
       setSavedMovieIds(validIds);
 
-      const moviePromises = validIds.map(async (movieId) => {
+      const savedPromises = validIds.map(async (movieId) => {
         try {
-          console.log("FETCHING MOVIE ID:", movieId);
+          console.log("FETCHING SAVED ANIME ID:", movieId);
 
-          const res = await fetch(
+          // 1. Try TMDB movie
+          let res = await fetch(
             `${API_BASE_URL}/movie/${movieId}`,
             API_OPTIONS
           );
-          if (!res.ok) {
-            console.log(`Invalid movie ID: ${movieId}`);
-            return null;
+
+          if (res.ok) {
+            const movie = await res.json();
+
+            return {
+              ...movie,
+              media_type: "movie",
+              title: movie.title || movie.name,
+            };
           }
-          return await res.json();
-        } catch {
+
+          // 2. If not a movie, try TMDB TV
+          console.log(`Not a movie. Trying TV ID: ${movieId}`);
+
+          res = await fetch(
+            `${API_BASE_URL}/tv/${movieId}`,
+            API_OPTIONS
+          );
+
+          if (res.ok) {
+            const tv = await res.json();
+
+            return {
+              ...tv,
+              media_type: "tv",
+              title: tv.name,
+              release_date: tv.first_air_date,
+            };
+          }
+
+          console.log(`Could not find TMDB movie/TV: ${movieId}`);
+
+          return null;
+        } catch (error) {
+          console.error(
+            `Error loading saved anime ${movieId}:`,
+            error
+          );
+
           return null;
         }
       });
 
+      const savedAnime = await Promise.all(savedPromises);
 
-      const movies = await Promise.all(moviePromises);
-      setSavedMoviesData(movies.filter(Boolean));
+      const validSavedAnime = savedAnime.filter(Boolean);
+
+      console.log("FINAL SAVED ANIME:", validSavedAnime);
+
+      setSavedMoviesData(validSavedAnime);
     } catch (error) {
-      console.error("Error loading saved anime", error);
+      console.error("Error loading saved anime:", error);
+      setSavedMoviesData([]);
     } finally {
       setIsLoadingSaved(false);
     }
@@ -2125,4 +2165,5 @@ const AnimeApp = ({ user, setUser }) => {
 };
 
 export default AnimeApp;
+
 
