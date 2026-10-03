@@ -6,6 +6,7 @@ import Filter from "./components/Filter.jsx";
 import Spinner from "./components/Spinner.jsx";
 import MovieCard from "./components/AnimeCard.jsx";
 import MoodDetector from "./components/MoodDetector.jsx";
+import AIModelInfo from "./components/AIModelInfo";
 import { useDebounce } from "react-use";
 import {
   getTrendingMovies,
@@ -1623,6 +1624,9 @@ const AnimeApp = ({ user, setUser }) => {
                 </section>
               )}
 
+              {/* ================= AI MODEL TRANSPARENCY ================= */}
+              {!debouncedSearchTerm && <AIModelInfo />}
+
               {trendingMovies.length > 0 && !debouncedSearchTerm && (
                 <section className="trending mb-8 relative">
                   <h2 className="section-title text-pink-400 font-bold text-2xl mb-6">
@@ -2165,5 +2169,6 @@ const AnimeApp = ({ user, setUser }) => {
 };
 
 export default AnimeApp;
+
 
 
