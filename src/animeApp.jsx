@@ -7,6 +7,7 @@ import Spinner from "./components/Spinner.jsx";
 import MovieCard from "./components/AnimeCard.jsx";
 import MoodDetector from "./components/MoodDetector.jsx";
 import AIModelInfo from "./components/AIModelInfo";
+import AnimeChatbot from "./components/AnimeChatbot";
 import { useDebounce } from "react-use";
 import {
   getTrendingMovies,
@@ -2164,11 +2165,15 @@ const AnimeApp = ({ user, setUser }) => {
           }}
         />
       )}
+
+      {/* Floating Groq-powered Anime Hub AI chatbot */}
+      <AnimeChatbot />
     </div>
   );
 };
 
 export default AnimeApp;
+
 
 
 

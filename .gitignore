@@ -38,5 +38,6 @@ backend/__pycache__/
 backend/ml/__pycache__/
 *.pyc
 
-
+.env
+backend/.env
 .env
