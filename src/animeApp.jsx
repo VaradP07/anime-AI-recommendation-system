@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import gsap from "gsap";
 import Sidebar from "./components/Sidebar.jsx";
@@ -2111,7 +2111,7 @@ const AnimeApp = ({ user, setUser }) => {
                     </p>
                   </div>
                 ) : (
-                  <ul>
+                  <ul className="saved-anime-grid">
                     {savedMoviesData.map((movie) => (
                       <MovieCard
                         key={movie.id}

@@ -204,18 +204,24 @@ async def tmdb_proxy(
 # 6. ANIME TITLE ALIASES
 # --------------------------------------------------
 
+
+
 TITLE_ALIASES = {
     "naruto": "Naruto",
-    "naruto shippuden": "Naruto: Shippuden",
-    "attack on titan": "Attack on Titan",
-    "demon slayer": "Demon Slayer: Kimetsu no Yaiba",
+    "naruto shippuden": "Naruto: Shippuuden",
+    "naruto: shippuden": "Naruto: Shippuuden",
+    "attack on titan": "Shingeki no Kyojin",
+    "shingeki no kyojin": "Shingeki no Kyojin",
+    "demon slayer": "Kimetsu no Yaiba",
+    "kimetsu no yaiba": "Kimetsu no Yaiba",
     "death note": "Death Note",
     "one piece": "One Piece",
     "jujutsu kaisen": "Jujutsu Kaisen",
-    "my hero academia": "My Hero Academia",
-    "fullmetal alchemist brotherhood":
-        "Fullmetal Alchemist: Brotherhood",
+    "my hero academia": "Boku no Hero Academia",
+    "fullmetal alchemist brotherhood": "Fullmetal Alchemist: Brotherhood",
 }
+
+
 
 
 # --------------------------------------------------
@@ -258,15 +264,27 @@ def recommend_anime(title: str):
 # 8. RECOMMEND ANIME FROM A DESCRIPTION
 # --------------------------------------------------
 
+
 @app.post("/recommend-from-text")
 def recommend_from_text(request: AnimeTextRequest):
     try:
+        description = request.description.strip()
+
+        if not description:
+            raise HTTPException(
+                status_code=400,
+                detail="Please provide an anime description."
+            )
+
         recommendations = get_recommendations_from_text(
-            request.description
+            anime_title=None,
+            genres="",
+            overview=description,
+            number_of_recommendations=10,
         )
 
         return {
-            "description": request.description,
+            "description": description,
             "recommendations": recommendations,
         }
 
@@ -281,6 +299,7 @@ def recommend_from_text(request: AnimeTextRequest):
                 f"from the description: {str(exc)}"
             ),
         )
+
 
 
 # --------------------------------------------------
