@@ -111,7 +111,6 @@ df["overview"] = df["overview"].str.lower()
 
 df["combined_features"] = (
     df["genres"] + " " +
-    df["genres"] + " " +
     df["overview"]
 )
 
