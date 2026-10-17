@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import gsap from "gsap";
 import Sidebar from "./components/Sidebar.jsx";
 import Search from "./components/Search.jsx";
@@ -170,7 +171,7 @@ const AIRecommendationCard = ({ anime, index, onSelect }) => {
               shadow-lg
             "
           >
-            🤖 AI
+            AI
           </span>
         </div>
 
@@ -467,11 +468,42 @@ const AnimeApp = ({ user, setUser }) => {
         }
       }
 
-      const response = await fetch(endpoint, API_OPTIONS);
+
+      let response;
+
+      try {
+        response = await fetch(endpoint, {
+          ...API_OPTIONS,
+          signal: AbortSignal.timeout(12000),
+        });
+      } catch (error) {
+        if (error.name === "TimeoutError") {
+          throw new Error("Anime service is taking too long. Please try again.");
+        }
+
+        if (error.name === "AbortError") {
+          throw new Error("Anime request was cancelled. Please try again.");
+        }
+
+        throw new Error(
+          "Unable to connect to the anime service. Check your internet connection."
+        );
+      }
 
       if (!response.ok) {
-        throw new Error("Failed to fetch anime");
+        if (response.status === 401 || response.status === 403) {
+          throw new Error("Anime service authorization failed. Check the API configuration.");
+        }
+
+        if (response.status === 429) {
+          throw new Error("Too many requests. Please wait a moment and try again.");
+        }
+
+        throw new Error(
+          `Anime service request failed (${response.status}). Please try again.`
+        );
       }
+
 
       const data = await response.json();
 
@@ -492,8 +524,17 @@ const AnimeApp = ({ user, setUser }) => {
 
       setMovieList(finalResults);
     } catch (error) {
-      console.error(`Error fetching anime: ${error}`);
-      setErrorMessage("Error fetching anime. Please try again later.");
+      console.error("Error fetching anime:", error);
+
+      // Show a useful message for network, timeout, and API errors.
+      setErrorMessage(
+        error instanceof Error && error.message
+          ? error.message
+          : "Unable to load anime right now. Please check your connection and try again."
+      );
+
+      // Avoid showing stale results as if they matched the failed request.
+      setMovieList([]);
     } finally {
       setIsLoading(false);
     }
@@ -587,15 +628,21 @@ const AnimeApp = ({ user, setUser }) => {
 
   const loadSavedMovieIds = async () => {
     try {
-      const ids = await getSavedMovies();
+      const records = await getSavedMovies();
 
-      const validIds = ids.filter(
-        (movieId) => String(movieId) !== "154526"
-      );
+      // Supports both the older format (IDs) and the updated format (records).
+      const ids = (Array.isArray(records) ? records : []).map((record) => {
+        if (record && typeof record === "object") {
+          return String(
+            record.movieId ?? record.movie?.id ?? record.id ?? ""
+          );
+        }
+        return String(record ?? "");
+      }).filter(Boolean);
 
-      setSavedMovieIds(validIds);
+      setSavedMovieIds(ids.filter((id) => id !== "154526"));
     } catch (error) {
-      console.error("Error loading saved movie IDs", error);
+      console.error("Error loading saved anime IDs:", error);
     }
   };
 
@@ -603,75 +650,82 @@ const AnimeApp = ({ user, setUser }) => {
     setIsLoadingSaved(true);
 
     try {
-      const ids = await getSavedMovies();
+      const records = await getSavedMovies();
+      console.log("SAVED ANIME RECORDS:", records);
 
-      console.log("ALL SAVED IDS:", ids);
+      // Normalize old ID-only records and new records containing movie details.
+      const normalizedRecords = (Array.isArray(records) ? records : [])
+        .map((record) => {
+          if (record && typeof record === "object") {
+            return {
+              movieId: String(
+                record.movieId ?? record.movie?.id ?? record.id ?? ""
+              ),
+              movie: record.movie ?? null,
+            };
+          }
 
-      // Remove invalid TMDB ID
-      const validIds = ids.filter(
-        (movieId) => String(movieId) !== "154526"
-      );
+          return { movieId: String(record ?? ""), movie: null };
+        })
+        .filter((record) => record.movieId && record.movieId !== "154526");
 
-      setSavedMovieIds(validIds);
+      setSavedMovieIds(normalizedRecords.map((record) => record.movieId));
 
-      const savedPromises = validIds.map(async (movieId) => {
-        try {
-          console.log("FETCHING SAVED ANIME ID:", movieId);
-
-          // 1. Try TMDB movie
-          let res = await fetch(
-            `${API_BASE_URL}/movie/${movieId}`,
-            API_OPTIONS
-          );
-
-          if (res.ok) {
-            const movie = await res.json();
-
+      const savedAnime = await Promise.all(
+        normalizedRecords.map(async (record) => {
+          // New records include the movie itself, so they don't depend on TMDB.
+          if (record.movie) {
+            const movie = record.movie;
             return {
               ...movie,
-              media_type: "movie",
-              title: movie.title || movie.name,
+              id: movie.id ?? record.movieId,
+              title: movie.title || movie.name || "Untitled Anime",
+              media_type: movie.media_type || "movie",
             };
           }
 
-          // 2. If not a movie, try TMDB TV
-          console.log(`Not a movie. Trying TV ID: ${movieId}`);
+          // Older records contain only a TMDB ID; look up movie first, then TV.
+          try {
+            let response = await fetch(
+              `${API_BASE_URL}/movie/${encodeURIComponent(record.movieId)}`,
+              API_OPTIONS
+            );
 
-          res = await fetch(
-            `${API_BASE_URL}/tv/${movieId}`,
-            API_OPTIONS
-          );
+            if (response.ok) {
+              const movie = await response.json();
+              return {
+                ...movie,
+                title: movie.title || movie.name || "Untitled Anime",
+                media_type: "movie",
+              };
+            }
 
-          if (res.ok) {
-            const tv = await res.json();
+            response = await fetch(
+              `${API_BASE_URL}/tv/${encodeURIComponent(record.movieId)}`,
+              API_OPTIONS
+            );
 
-            return {
-              ...tv,
-              media_type: "tv",
-              title: tv.name,
-              release_date: tv.first_air_date,
-            };
+            if (response.ok) {
+              const tv = await response.json();
+              return {
+                ...tv,
+                title: tv.name || tv.title || "Untitled Anime",
+                release_date: tv.first_air_date || tv.release_date,
+                media_type: "tv",
+              };
+            }
+
+            console.warn(`Could not load saved anime with TMDB ID ${record.movieId}`);
+            return null;
+          } catch (error) {
+            console.error(`Error loading saved anime ${record.movieId}:`, error);
+            return null;
           }
-
-          console.log(`Could not find TMDB movie/TV: ${movieId}`);
-
-          return null;
-        } catch (error) {
-          console.error(
-            `Error loading saved anime ${movieId}:`,
-            error
-          );
-
-          return null;
-        }
-      });
-
-      const savedAnime = await Promise.all(savedPromises);
+        })
+      );
 
       const validSavedAnime = savedAnime.filter(Boolean);
-
-      console.log("FINAL SAVED ANIME:", validSavedAnime);
-
+      console.log("LOADED SAVED ANIME:", validSavedAnime);
       setSavedMoviesData(validSavedAnime);
     } catch (error) {
       console.error("Error loading saved anime:", error);
@@ -680,6 +734,16 @@ const AnimeApp = ({ user, setUser }) => {
       setIsLoadingSaved(false);
     }
   };
+
+  // Load saved items whenever the user opens Saved Anime. Refresh IDs when
+  // returning to Discover so the heart buttons reflect the current state.
+  useEffect(() => {
+    if (activeView === "saved") {
+      loadSavedMoviesData();
+    } else {
+      loadSavedMovieIds();
+    }
+  }, [activeView, user]);
 
   useEffect(() => {
     if (movieList.length === 0 || debouncedSearchTerm) return;
@@ -794,6 +858,82 @@ const AnimeApp = ({ user, setUser }) => {
       className="anime-hub-container"
       style={{ "--sidebar-width": isSidebarCollapsed ? "80px" : "256px" }}
     >
+      <style>{`
+        .anime-hub-container {
+          width: 100%;
+          max-width: 100vw;
+          min-width: 0;
+          overflow-x: clip;
+        }
+
+        .anime-hub-container .main-content {
+          min-width: 0;
+          max-width: 100%;
+        }
+
+        .anime-hub-container .wrapper {
+          min-width: 0;
+          width: 100%;
+          box-sizing: border-box;
+        }
+
+        .anime-chatbot-portal {
+          position: fixed;
+          inset: 0;
+          z-index: 2147483000;
+          pointer-events: none;
+        }
+
+        .anime-chatbot-portal > * {
+          pointer-events: auto;
+        }
+
+        @media (max-width: 640px) {
+          .anime-hub-container .wrapper {
+            padding-left: 12px;
+            padding-right: 12px;
+          }
+
+          .anime-hub-container .top-search-bar {
+            margin-bottom: 24px;
+          }
+
+          .anime-hub-container .multi-category-grid {
+            grid-template-columns: minmax(0, 1fr);
+            gap: 24px;
+          }
+
+          .anime-hub-container .trending-carousel > li {
+            width: 38vw;
+          }
+
+          .anime-hub-container .comments-preview-section {
+            gap: 12px;
+          }
+
+          .anime-hub-container .comments-container {
+            min-width: 0;
+            padding: 16px;
+          }
+
+          .anime-hub-container .share-banner {
+            padding: 14px;
+          }
+
+          .anime-hub-container .share-buttons {
+            width: 100%;
+          }
+
+          .anime-hub-container .share-btn {
+            flex: 1 1 calc(50% - 8px);
+          }
+
+          .anime-hub-container .all-movies .grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+          }
+        }
+      `}</style>
       <Sidebar
         user={user}
         setUser={setUser}
@@ -914,7 +1054,7 @@ const AnimeApp = ({ user, setUser }) => {
                           }}
                           className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-400/30 text-red-400 font-semibold hover:bg-red-500 hover:text-white transition-all"
                         >
-                          ✕ Remove Mood Filter
+                          × Remove Mood Filter
                         </button>
                       </div>
 
@@ -948,7 +1088,7 @@ const AnimeApp = ({ user, setUser }) => {
                           <div>
                             <div className="mb-3 flex items-center gap-3">
                               <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-pink-500/20 bg-pink-500/15 text-xl shadow-lg shadow-pink-500/10">
-                                🤖
+                                AI
                               </div>
 
                               <div>
@@ -1538,7 +1678,7 @@ const AnimeApp = ({ user, setUser }) => {
                       <div>
                         <div className="mb-3 flex items-center gap-3">
                           <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-pink-500/20 bg-pink-500/10 text-xl shadow-lg shadow-pink-500/10">
-                            🤖
+                            AI
                           </div>
 
                           <div>
@@ -2166,14 +2306,16 @@ const AnimeApp = ({ user, setUser }) => {
         />
       )}
 
-      {/* Floating Groq-powered Anime Hub AI chatbot */}
-      <AnimeChatbot />
+      {/* Render chatbot outside the app layout */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <div className="anime-chatbot-portal">
+            <AnimeChatbot />
+          </div>,
+          document.body,
+        )}
     </div>
   );
 };
 
 export default AnimeApp;
-
-
-
-

@@ -1,38 +1,67 @@
-import os
 
+import os
+import re
+
+import httpx
 from dotenv import load_dotenv
-from groq import Groq
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from groq import Groq
 
 from ml.recommender import (
     get_recommendations,
     get_recommendations_from_text,
 )
 
-# ==========================================
-# Environment and Groq Configuration
-# ==========================================
+
+# --------------------------------------------------
+# 1. ENVIRONMENT CONFIGURATION
+# --------------------------------------------------
 
 load_dotenv()
 
+print("ENV file loaded:", os.path.isfile(".env"))
+print(
+    "TMDB token loaded:",
+    bool(os.getenv("TMDB_API_READ_ACCESS_TOKEN")),
+)
+
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+GROQ_MODEL = os.getenv(
+    "GROQ_MODEL",
+    "openai/gpt-oss-20b",
+)
 
-groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+TMDB_API_READ_ACCESS_TOKEN = os.getenv(
+    "TMDB_API_READ_ACCESS_TOKEN"
+)
+TMDB_BASE_URL = "https://api.themoviedb.org/3"
 
-# ==========================================
-# FastAPI Application
-# ==========================================
+groq_client = (
+    Groq(api_key=GROQ_API_KEY)
+    if GROQ_API_KEY
+    else None
+)
 
-app = FastAPI(title="Anime Hub AI API")
+
+# --------------------------------------------------
+# 2. FASTAPI APPLICATION
+# --------------------------------------------------
+
+app = FastAPI(
+    title="Anime Hub AI API",
+    description="Anime recommendations, AI chat, and TMDB proxy.",
+    version="1.0.0",
+)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
         "http://localhost:5174",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -40,221 +69,289 @@ app.add_middleware(
 )
 
 
-# ==========================================
-# Home API
-# ==========================================
+# --------------------------------------------------
+# 3. REQUEST MODELS
+# --------------------------------------------------
+
+class AnimeTextRequest(BaseModel):
+    description: str = Field(
+        ...,
+        min_length=3,
+        max_length=2000,
+    )
+
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str = Field(
+        ...,
+        min_length=1,
+        max_length=4000,
+    )
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+    )
+    history: list[ChatMessage] = Field(
+        default_factory=list,
+        max_length=8,
+    )
+
+
+# --------------------------------------------------
+# 4. HOME / HEALTH CHECK
+# --------------------------------------------------
 
 @app.get("/")
 def home():
-    return {"message": "Anime Recommendation API is running"}
-
-
-# ==========================================
-# Common English Title -> Dataset Title
-# ==========================================
-
-TITLE_ALIASES = {
-    "attack on titan": "Shingeki no Kyojin",
-    "aot": "Shingeki no Kyojin",
-    "my hero academia": "Boku no Hero Academia",
-    "mha": "Boku no Hero Academia",
-    "demon slayer": "Kimetsu no Yaiba",
-    "demon slayer kimetsu no yaiba": "Kimetsu no Yaiba",
-    "your name": "Kimi no Na wa.",
-    "weathering with you": "Tenki no Ko",
-    "jujutsu kaisen": "Jujutsu Kaisen",
-    "death note": "Death Note",
-    "naruto": "Naruto",
-    "one piece": "One Piece",
-}
-
-
-# ==========================================
-# ML Recommendation API
-# ==========================================
-
-@app.get("/recommend/{title}")
-def recommend(title: str):
-    clean_title = title.strip()
-    lookup_title = clean_title.lower()
-    dataset_title = TITLE_ALIASES.get(lookup_title, clean_title)
-
-    print("User searched:", clean_title)
-    print("Dataset title used:", dataset_title)
-
-    recommendations = get_recommendations(dataset_title, 10)
-
     return {
-        "input_anime": clean_title,
-        "matched_dataset_title": dataset_title,
-        "recommendations": recommendations,
+        "message": "Anime Hub AI API is running!",
+        "status": "success",
+        "docs": "/docs",
     }
 
 
-# ==========================================
-# External Anime Content Request
-# ==========================================
+# --------------------------------------------------
+# 5. TMDB PROXY
+# --------------------------------------------------
 
-class AnimeTextRequest(BaseModel):
-    title: str
-    genres: str = ""
-    overview: str = ""
-
-
-@app.post("/recommend-from-text")
-def recommend_from_text(request: AnimeTextRequest):
-    print("External anime:", request.title)
-
-    recommendations = get_recommendations_from_text(
-        anime_title=request.title,
-        genres=request.genres,
-        overview=request.overview,
-        number_of_recommendations=10,
-    )
-
-    return {
-        "input_anime": request.title,
-        "recommendations": recommendations,
-    }
+TMDB_ALLOWED_PATHS = re.compile(
+    r"^(discover/(movie|tv)|"
+    r"search/(movie|tv|multi)|"
+    r"trending/(movie|tv|all)/(day|week)|"
+    r"(movie|tv)/\d+|"
+    r"genre/(movie|tv)/list)$"
+)
 
 
-# ==========================================
-# Chatbot Request Model
-# ==========================================
+@app.get("/tmdb/{tmdb_path:path}")
+async def tmdb_proxy(
+    tmdb_path: str,
+    request: Request,
+):
+    """
+    Forwards approved TMDB API requests through this backend.
+    The TMDB access token stays on the server.
+    """
 
-class ChatRequest(BaseModel):
-    message: str
-    history: list[dict[str, str]] = Field(default_factory=list)
-
-
-# ==========================================
-# Groq-Only AI Chatbot API
-# ==========================================
-
-@app.post("/chat")
-def chat(request: ChatRequest):
-    if not groq_client:
+    if not TMDB_API_READ_ACCESS_TOKEN:
         raise HTTPException(
             status_code=500,
-            detail="Groq API key is missing. Check backend/.env.",
-        )
-
-    message = request.message.strip()
-
-    if not message:
-        raise HTTPException(
-            status_code=400,
-            detail="Message cannot be empty.",
-        )
-
-    if len(message) > 2000:
-        raise HTTPException(
-            status_code=400,
-            detail="Message must be 2000 characters or fewer.",
-        )
-
-    system_prompt = """
-You are Anime Hub AI, a friendly and intelligent anime assistant.
-
-PERSONALITY:
-- Be friendly, helpful, and enthusiastic about anime.
-- Use simple, natural English.
-- Use emojis occasionally, but do not overuse them.
-
-RESPONSE STYLE:
-- Keep answers concise and easy to read on mobile screens.
-- Use short paragraphs and clear headings when useful.
-- Prefer numbered lists or bullet points over Markdown tables.
-- Avoid unnecessarily long introductions and repeated information.
-- Use bold text to highlight important anime titles and details.
-- Format answers cleanly for a small chat window.
-
-ANIME RECOMMENDATIONS:
-- Recommend anime relevant to the user's request.
-- For each recommendation, include the title, genre, a short reason,
-  and episode count when known.
-- For beginner recommendations, prioritize accessible stories
-  and explain why each anime is suitable.
-- Distinguish movies from TV series.
-- Do not invent episode counts, ratings, or factual details.
-- If uncertain, say so instead of guessing.
-- Usually suggest 3–5 anime unless the user asks for more.
-- Ask about the user's preferred genre only when it would help.
-
-PROJECT RULES:
-- You are the conversational Groq-powered assistant.
-- Do not claim to have queried the local ML recommendation model
-  or Firebase unless the application actually did so.
-- The dedicated recommendation section uses the separate
-  TF-IDF and cosine similarity recommendation system.
-- Do not pretend that generated suggestions are ML model results.
-
-ACCURACY RULES:
-- Use the correct, commonly recognized anime title.
-- Never invent or guess anime titles, episode counts, genres,
-  ratings, or runtime.
-- Distinguish TV series from movies.
-- If the user requests TV series only, do not include movies.
-- If you are uncertain about a factual detail, omit it or
-  clearly state that you are uncertain.
-- Keep recommendations concise and easy to read.
-- Before responding, check that the answer follows all
-  user constraints and does not contradict itself.
-
-Always answer the user's actual question first.
-"""
-
-    messages = [
-        {
-            "role": "system",
-            "content": system_prompt,
-        }
-    ]
-
-    # Include recent conversation history.
-    for item in request.history[-8:]:
-        role = item.get("role")
-        content = item.get("content", "")
-
-        if (
-            role in ("user", "assistant")
-            and isinstance(content, str)
-            and content.strip()
-            and len(content) <= 2000
-        ):
-            messages.append({
-                "role": role,
-                "content": content,
-            })
-
-    # Append the current message after previous conversation history.
-    messages.append({
-        "role": "user",
-        "content": message,
-    })
-
-    try:
-        response = groq_client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=messages,
-            temperature=0.7,
-            max_completion_tokens=700,
-        )
-
-        answer = response.choices[0].message.content
-
-        return {
-            "reply": answer or "Sorry, I couldn't generate a response."
-        }
-
-    except Exception as error:
-        print("Groq chatbot error:", error)
-
-        raise HTTPException(
-            status_code=502,
             detail=(
-                "The Groq assistant could not respond. "
-                "Check your API key, model availability, and usage limits."
+                "TMDB access token is not configured. "
+                "Check the backend .env file."
             ),
         )
 
+    if not TMDB_ALLOWED_PATHS.fullmatch(tmdb_path):
+        raise HTTPException(
+            status_code=404,
+            detail="This TMDB endpoint is not allowed.",
+        )
+
+    params = {
+        key: value
+        for key, value in request.query_params.multi_items()
+        if key.lower() != "api_key"
+    }
+
+    headers = {
+        "Authorization": (
+            f"Bearer {TMDB_API_READ_ACCESS_TOKEN}"
+        ),
+        "Accept": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=15.0
+        ) as client:
+            response = await client.get(
+                f"{TMDB_BASE_URL}/{tmdb_path}",
+                params=params,
+                headers=headers,
+            )
+
+        if response.status_code >= 400:
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=(
+                    "TMDB rejected the request. "
+                    "Check the endpoint and access token."
+                ),
+            )
+
+        return response.json()
+
+    except httpx.TimeoutException:
+        raise HTTPException(
+            status_code=504,
+            detail="TMDB request timed out.",
+        )
+
+    except httpx.RequestError:
+        raise HTTPException(
+            status_code=502,
+            detail="The backend could not connect to TMDB.",
+        )
+
+
+# --------------------------------------------------
+# 6. ANIME TITLE ALIASES
+# --------------------------------------------------
+
+TITLE_ALIASES = {
+    "naruto": "Naruto",
+    "naruto shippuden": "Naruto: Shippuden",
+    "attack on titan": "Attack on Titan",
+    "demon slayer": "Demon Slayer: Kimetsu no Yaiba",
+    "death note": "Death Note",
+    "one piece": "One Piece",
+    "jujutsu kaisen": "Jujutsu Kaisen",
+    "my hero academia": "My Hero Academia",
+    "fullmetal alchemist brotherhood":
+        "Fullmetal Alchemist: Brotherhood",
+}
+
+
+# --------------------------------------------------
+# 7. RECOMMEND ANIME BY TITLE
+# --------------------------------------------------
+
+@app.get("/recommend/{title}")
+def recommend_anime(title: str):
+    try:
+        cleaned_title = title.strip()
+        dataset_title = TITLE_ALIASES.get(
+            cleaned_title.lower(),
+            cleaned_title,
+        )
+
+        recommendations = get_recommendations(
+            dataset_title,
+            10,
+        )
+
+        return {
+            "title": dataset_title,
+            "recommendations": recommendations,
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Could not generate recommendations. "
+                f"Details: {str(exc)}"
+            ),
+        )
+
+
+# --------------------------------------------------
+# 8. RECOMMEND ANIME FROM A DESCRIPTION
+# --------------------------------------------------
+
+@app.post("/recommend-from-text")
+def recommend_from_text(request: AnimeTextRequest):
+    try:
+        recommendations = get_recommendations_from_text(
+            request.description
+        )
+
+        return {
+            "description": request.description,
+            "recommendations": recommendations,
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Could not generate recommendations "
+                f"from the description: {str(exc)}"
+            ),
+        )
+
+
+# --------------------------------------------------
+# 9. GROQ-POWERED ANIME CHATBOT
+# --------------------------------------------------
+
+@app.post("/chat")
+def anime_chat(request: ChatRequest):
+    if not groq_client:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Groq API key is missing. "
+                "Configure GROQ_API_KEY in backend/.env."
+            ),
+        )
+
+    try:
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are Anime Hub AI, a friendly anime "
+                    "assistant. Help users discover anime, "
+                    "compare anime, understand storylines, "
+                    "and find recommendations. Be accurate, "
+                    "helpful, and easy to understand. "
+                    "Do not invent facts when uncertain."
+                ),
+            }
+        ]
+
+        for item in request.history:
+            if item.role not in ("user", "assistant"):
+                continue
+
+            messages.append(
+                {
+                    "role": item.role,
+                    "content": item.content,
+                }
+            )
+
+        messages.append(
+            {
+                "role": "user",
+                "content": request.message,
+            }
+        )
+
+        completion = groq_client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=1000,
+        )
+
+        reply = (
+            completion.choices[0].message.content or ""
+        ).strip()
+
+        return {
+            "reply": reply,
+            "recommendations": [],
+        }
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "The AI assistant could not generate "
+                f"a response: {str(exc)}"
+            ),
+        )

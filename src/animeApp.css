@@ -348,3 +348,232 @@ button {
   border-radius: 18px;
   transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
 }
+
+/* =========================================================
+   ANIME HUB AI — MOBILE UI POLISH
+   ========================================================= */
+
+.anime-hub-container,
+.main-content,
+.wrapper {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.main-content {
+  min-width: 0;
+}
+
+.wrapper {
+  width: 100%;
+}
+
+img {
+  max-width: 100%;
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    padding: 18px 12px;
+  }
+
+  .wrapper {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  .top-search-bar {
+    margin-bottom: 22px !important;
+  }
+
+  .trending {
+    margin-bottom: 32px;
+  }
+
+  .trending h2,
+  .all-movies h2 {
+    font-size: clamp(1.2rem, 5vw, 1.6rem);
+    margin-bottom: 16px;
+  }
+
+  .trending ul {
+    gap: 12px;
+    padding: 4px 4px 16px;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .trending li {
+    min-width: 120px;
+    scroll-snap-align: start;
+  }
+
+  .trending img {
+    border-radius: 14px;
+  }
+
+  .movie-card {
+    padding: 10px;
+    border-radius: 16px;
+  }
+
+  .movie-card img {
+    border-radius: 12px;
+    margin-bottom: 10px;
+  }
+
+  .movie-card h3 {
+    font-size: 0.95rem;
+    margin-bottom: 8px;
+  }
+
+  .movie-card .content {
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 0.8rem;
+  }
+
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  input,
+  select,
+  textarea {
+    max-width: 100%;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .main-content {
+    padding: 14px 8px;
+  }
+
+  .trending li {
+    min-width: 108px;
+  }
+
+  .movie-card {
+    padding: 8px;
+  }
+
+  .movie-card h3 {
+    font-size: 0.88rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .movie-card,
+  .trending img,
+  button {
+    transition: none !important;
+  }
+}
+
+/* =========================================================
+   MOBILE ANIME CARD POLISH
+   ========================================================= */
+
+@media (max-width: 768px) {
+  .all-movies {
+    margin-top: 2rem !important;
+  }
+
+  .all-movies h2 {
+    font-size: clamp(1.25rem, 4.5vw, 1.65rem) !important;
+    line-height: 1.3;
+    margin-bottom: 1rem !important;
+  }
+
+  .movie-card {
+    min-width: 0 !important;
+    padding: 8px !important;
+    border-radius: 16px !important;
+    background: rgba(18, 16, 25, 0.92) !important;
+    border-color: rgba(255, 255, 255, 0.09) !important;
+  }
+
+  .movie-card img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    object-fit: cover;
+    border-radius: 11px !important;
+    margin-bottom: 0 !important;
+  }
+
+  .movie-card h3 {
+    margin-top: 10px;
+    margin-bottom: 8px !important;
+    font-size: 0.9rem !important;
+    line-height: 1.35 !important;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    white-space: normal;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+
+  .movie-card .content {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px 8px !important;
+    font-size: 0.75rem !important;
+  }
+
+  .movie-card .rating {
+    gap: 4px !important;
+  }
+
+  .trending li {
+    min-width: clamp(105px, 31vw, 135px) !important;
+  }
+
+  .trending img {
+    border-radius: 13px !important;
+  }
+
+  .trending ul {
+    gap: 12px !important;
+    padding-left: 4px;
+    padding-right: 8px;
+    scroll-padding-left: 4px;
+  }
+
+  .all-movies .grid {
+    gap: 12px !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .movie-card {
+    padding: 6px !important;
+  }
+
+  .movie-card h3 {
+    font-size: 0.82rem !important;
+  }
+
+  .movie-card .content {
+    font-size: 0.7rem !important;
+  }
+
+  .all-movies .grid {
+    gap: 9px !important;
+  }
+}
+
+@media (hover: none) {
+  .movie-card:hover {
+    transform: none !important;
+  }
+
+  .trending li:hover img {
+    transform: none !important;
+  }
+}
