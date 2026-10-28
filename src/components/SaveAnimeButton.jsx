@@ -1,35 +1,50 @@
+
 import { useState, useEffect } from "react";
-import { saveMovieToWatchlist, removeMovieFromWatchlist } from "../firebase";
+import {
+  saveMovieToWatchlist,
+  removeMovieFromWatchlist,
+} from "../firebase";
 import { TiHeartFullOutline, TiHeartOutline } from "react-icons/ti";
 
-const SaveMovieButton = ({ movie, savedMovieIds, onSaveToggle }) => {
-  const [isSaved, setIsSaved] = useState(false);
+const SaveMovieButton = ({
+  movie,
+  savedMovieIds = [],
+  onSaveToggle,
+}) => {
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    setIsSaved(savedMovieIds?.includes(movie.id) || false);
-  }, [movie.id, savedMovieIds]);
+  const movieId = movie?.id == null ? "" : String(movie.id);
+
+  const isSaved = savedMovieIds.some(
+    (id) => String(id) === movieId
+  );
 
   const toggleSave = async (e) => {
-    e.preventDefault(); // Prevent navigating to the movie link
+    e.preventDefault();
     e.stopPropagation();
 
-    if (isSaving) return;
+    if (isSaving || !movieId) return;
 
     setIsSaving(true);
+
     try {
       if (isSaved) {
-        await removeMovieFromWatchlist(movie.id);
-        setIsSaved(false);
+        const removed = await removeMovieFromWatchlist(movieId);
+
+        if (removed === false) {
+          console.warn("Anime was not found in the saved list.");
+        }
       } else {
         await saveMovieToWatchlist(movie);
-        setIsSaved(true);
       }
-      if (onSaveToggle) {
-        onSaveToggle(); // Callback to refresh global savedMovies list
+
+      // Ask the parent component to reload the saved anime list.
+      if (typeof onSaveToggle === "function") {
+        await onSaveToggle();
       }
     } catch (error) {
-      console.error("Failed to toggle save", error);
+      console.error("Failed to update saved anime:", error);
+      alert(error.message || "Could not update your saved anime.");
     } finally {
       setIsSaving(false);
     }
@@ -37,16 +52,20 @@ const SaveMovieButton = ({ movie, savedMovieIds, onSaveToggle }) => {
 
   return (
     <button
+      type="button"
       onClick={toggleSave}
       disabled={isSaving}
-      className="absolute top-4 right-4 p-2.5 rounded-full bg-black/50 backdrop-blur-md border border-white/10 text-white hover:bg-black/80 hover:scale-110 active:scale-95 transition-all z-20 group disabled:opacity-50"
+      aria-label={isSaved ? "Remove from saved anime" : "Save anime"}
+      title={isSaved ? "Remove from Saved Anime" : "Save Anime"}
+      className="absolute top-4 right-4 z-20 rounded-full border border-white/10 bg-black/50 p-2.5 text-white backdrop-blur-md transition-all hover:scale-110 hover:bg-black/80 active:scale-95 disabled:cursor-wait disabled:opacity-50"
     >
       {isSaved ? (
-        <TiHeartFullOutline className="text-xl text-red-500 drop-shadow-lg" />
+        <TiHeartFullOutline className="text-xl text-red-500" />
       ) : (
-        <TiHeartOutline className="text-xl text-white group-hover:text-red-400 drop-shadow-lg" />
+        <TiHeartOutline className="text-xl text-white hover:text-red-400" />
       )}
     </button>
   );
 };
+
 export default SaveMovieButton;

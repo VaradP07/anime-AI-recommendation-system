@@ -9,6 +9,7 @@ import {
   onAuthStateChanged,
   GoogleAuthProvider,
   signInWithPopup,
+  sendPasswordResetEmail,
 } from "firebase/auth";
 
 import {
@@ -23,6 +24,7 @@ import {
   limit,
   updateDoc,
   deleteDoc,
+  increment,
 } from "firebase/firestore";
 
 // --------------------------------------------------
@@ -42,7 +44,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 const auth = getAuth(app);
-
 export const db = getFirestore(app);
 
 // --------------------------------------------------
@@ -53,7 +54,7 @@ export const signUp = async (email, password, name) => {
   try {
     const userCredential = await createUserWithEmailAndPassword(
       auth,
-      email,
+      email.trim(),
       password
     );
 
@@ -61,8 +62,8 @@ export const signUp = async (email, password, name) => {
 
     await setDoc(doc(db, "users", user.uid), {
       prefs: {
-        name,
-        email,
+        name: name || "",
+        email: user.email || email,
         profilePic: "",
         age: "",
         phone: "",
@@ -82,7 +83,7 @@ export const login = async (email, password) => {
   try {
     const userCredential = await signInWithEmailAndPassword(
       auth,
-      email,
+      email.trim(),
       password
     );
 
@@ -95,7 +96,6 @@ export const login = async (email, password) => {
 
 export const signInWithGoogle = async () => {
   const provider = new GoogleAuthProvider();
-
   const userCredential = await signInWithPopup(auth, provider);
   const user = userCredential.user;
 
@@ -151,6 +151,25 @@ export const getCurrentUser = () => {
   });
 };
 
+// Optional auth listener for components that subscribe to auth changes.
+export const onAuthChange = (callback) => {
+  return onAuthStateChanged(auth, callback);
+};
+
+// --------------------------------------------------
+// FORGOT PASSWORD
+// --------------------------------------------------
+
+export const resetPassword = async (email) => {
+  const normalizedEmail = email.trim();
+
+  if (!normalizedEmail) {
+    throw new Error("Please enter your email address.");
+  }
+
+  return sendPasswordResetEmail(auth, normalizedEmail);
+};
+
 // --------------------------------------------------
 // USER PROFILE AND PREFERENCES
 // --------------------------------------------------
@@ -163,9 +182,11 @@ export const updateUserPrefs = async (prefs) => {
       throw new Error("No user logged in");
     }
 
-    const userRef = doc(db, "users", user.uid);
-
-    await setDoc(userRef, { prefs }, { merge: true });
+    await setDoc(
+      doc(db, "users", user.uid),
+      { prefs },
+      { merge: true }
+    );
 
     return true;
   } catch (error) {
@@ -180,14 +201,9 @@ export const getUserPrefs = async () => {
 
     if (!user) return {};
 
-    const userRef = doc(db, "users", user.uid);
-    const snapshot = await getDoc(userRef);
+    const snapshot = await getDoc(doc(db, "users", user.uid));
 
-    if (snapshot.exists()) {
-      return snapshot.data().prefs || {};
-    }
-
-    return {};
+    return snapshot.exists() ? snapshot.data().prefs || {} : {};
   } catch (error) {
     console.error("Get preferences error:", error);
     throw error;
@@ -200,7 +216,7 @@ export const getUserPrefs = async () => {
 
 export const updateMovieClickCount = async (movie) => {
   try {
-    if (!movie?.id) {
+    if (movie?.id == null) {
       throw new Error("Movie ID is required");
     }
 
@@ -210,7 +226,7 @@ export const updateMovieClickCount = async (movie) => {
     if (snapshot.exists()) {
       await updateDoc(movieRef, {
         movie,
-        count: (snapshot.data().count || 0) + 1,
+        count: increment(1),
       });
     } else {
       await setDoc(movieRef, {
@@ -233,9 +249,9 @@ export const getTrendingMovies = async () => {
 
     const snapshot = await getDocs(moviesQuery);
 
-    return snapshot.docs.map((documentSnapshot) => ({
-      ...documentSnapshot.data(),
-      id: documentSnapshot.id,
+    return snapshot.docs.map((item) => ({
+      ...item.data(),
+      id: item.data().movie?.id ?? item.id,
     }));
   } catch (error) {
     console.error("Error fetching trending movies:", error);
@@ -257,7 +273,7 @@ export const saveMovieToWatchlist = async (movie) => {
       throw new Error("Please log in before saving anime.");
     }
 
-    if (!movie?.id) {
+    if (movie?.id == null) {
       throw new Error("Cannot save anime without an ID.");
     }
 
@@ -275,10 +291,7 @@ export const saveMovieToWatchlist = async (movie) => {
       savedMovieRef,
       {
         movieId,
-        movie: {
-          ...movie,
-          id: movie.id,
-        },
+        movie: { ...movie },
         savedAt: new Date().toISOString(),
       },
       { merge: true }
@@ -299,7 +312,7 @@ export const removeMovieFromWatchlist = async (movieId) => {
       throw new Error("Please log in before removing saved anime.");
     }
 
-    if (movieId === undefined || movieId === null) {
+    if (movieId == null) {
       throw new Error("Cannot remove anime without an ID.");
     }
 
@@ -311,6 +324,14 @@ export const removeMovieFromWatchlist = async (movieId) => {
       String(movieId)
     );
 
+    // Check whether the record exists before deleting.
+    const snapshot = await getDoc(savedMovieRef);
+
+    if (!snapshot.exists()) {
+      console.warn("Saved anime record not found:", movieId);
+      return false;
+    }
+
     await deleteDoc(savedMovieRef);
 
     return true;
@@ -320,25 +341,11 @@ export const removeMovieFromWatchlist = async (movieId) => {
   }
 };
 
-/**
- * Returns saved records, not just IDs.
- *
- * New record:
- * {
- *   movieId: "123",
- *   movie: { id: 123, title: "...", poster_path: "..." },
- *   savedAt: "..."
- * }
- *
- * Older records containing only movieId remain supported.
- */
 export const getSavedMovies = async () => {
   try {
     const user = auth.currentUser;
 
-    if (!user) {
-      return [];
-    }
+    if (!user) return [];
 
     const savedMoviesCollection = collection(
       db,
@@ -354,12 +361,12 @@ export const getSavedMovies = async () => {
 
     const snapshot = await getDocs(savedMoviesQuery);
 
-    return snapshot.docs.map((documentSnapshot) => {
-      const data = documentSnapshot.data();
+    return snapshot.docs.map((item) => {
+      const data = item.data();
 
       return {
         ...data,
-        movieId: data.movieId ?? documentSnapshot.id,
+        movieId: data.movieId ?? item.id,
         movie: data.movie ?? null,
       };
     });
@@ -367,13 +374,4 @@ export const getSavedMovies = async () => {
     console.error("Error fetching saved anime:", error);
     throw error;
   }
-};
-export const resetPassword = async (email) => {
-  const normalizedEmail = email.trim();
-
-  if (!normalizedEmail) {
-    throw new Error("Please enter your email address.");
-  }
-
-  return sendPasswordResetEmail(auth, normalizedEmail);
 };

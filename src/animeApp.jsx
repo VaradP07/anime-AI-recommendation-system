@@ -342,6 +342,7 @@ const AnimeApp = ({ user, setUser }) => {
   });
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState({ type: "", message: "" });
+  const [profileErrors, setProfileErrors] = useState({ age: "", phone: "" });
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
 
   useDebounce(() => setDebouncedSearchTerm(searchTerm), 500, [searchTerm]);
@@ -556,14 +557,19 @@ const AnimeApp = ({ user, setUser }) => {
     try {
       const prefs = await getUserPrefs();
       if (prefs) {
+
+
         setProfileData((prev) => ({
           ...prev,
+          name: prefs.name || "",
           age: prefs.age || "",
           phone: prefs.phone || "",
           profilePic: prefs.profilePic || "",
           state: prefs.state || "",
           country: prefs.country || "",
         }));
+
+
 
         // If location is missing, detect it
         if (!prefs.state || !prefs.country) {
@@ -818,22 +824,55 @@ const AnimeApp = ({ user, setUser }) => {
 
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
-    setIsSaving(true);
     setSaveStatus({ type: "", message: "" });
+
+    const ageText = String(profileData.age ?? "").trim();
+    const phoneText = String(profileData.phone ?? "").trim();
+    const age = Number(ageText);
+    const phone = phoneText.replace(/[\\s()-]/g, "");
+
+    const errors = { age: "", phone: "" };
+
+    if (!ageText) {
+      errors.age = "Please enter your age.";
+    } else if (!Number.isInteger(age) || age < 15 || age > 100) {
+      errors.age = "Age must be a whole number between 15 and 100.";
+    }
+
+    if (!phoneText) {
+      errors.phone = "Please enter your 10-digit Indian mobile number.";
+    } else if (!/^[6-9][0-9]{9}$/.test(phone)) {
+      errors.phone =
+        "Enter a valid Indian mobile number with 10 digits starting with 6, 7, 8, or 9.";
+    }
+
+    setProfileErrors(errors);
+
+    if (errors.age || errors.phone) {
+      setSaveStatus({
+        type: "error",
+        message: "Please correct the highlighted fields before saving.",
+      });
+      return;
+    }
+
+    setIsSaving(true);
 
     try {
       await updateUserPrefs({
-        age: profileData.age,
-        phone: profileData.phone,
+        age: String(age),
+        phone,
         profilePic: profileData.profilePic,
         state: profileData.state,
         country: profileData.country,
       });
+      setProfileData((prev) => ({ ...prev, age: String(age), phone }));
       setSaveStatus({
         type: "success",
         message: "Profile updated successfully!",
       });
     } catch (error) {
+      console.error("Error updating profile:", error);
       setSaveStatus({
         type: "error",
         message: "Failed to save changes. Please try again.",
@@ -2206,29 +2245,53 @@ const AnimeApp = ({ user, setUser }) => {
                           <label>Age</label>
                           <input
                             type="number"
-                            placeholder="How old are you?"
+                            min="15"
+                            max="120"
+                            step="1"
+                            inputMode="numeric"
+                            placeholder="Age (minimum 15)"
                             value={profileData.age}
-                            onChange={(e) =>
-                              setProfileData({
-                                ...profileData,
+                            aria-invalid={Boolean(profileErrors.age)}
+                            aria-describedby={profileErrors.age ? "profile-age-error" : undefined}
+                            onChange={(e) => {
+                              setProfileData((prev) => ({
+                                ...prev,
                                 age: e.target.value,
-                              })
-                            }
+                              }));
+                              setProfileErrors((prev) => ({ ...prev, age: "" }));
+                            }}
                           />
+                          {profileErrors.age && (
+                            <p id="profile-age-error" role="alert" className="mt-2 text-xs font-semibold text-red-400">
+                              {profileErrors.age}
+                            </p>
+                          )}
                         </div>
                         <div className="input-field">
                           <label>Phone Number</label>
                           <input
                             type="tel"
-                            placeholder="+1 (555) 000-0000"
+                            inputMode="numeric"
+                            autoComplete="tel-national"
+                            maxLength={10}
+                            placeholder="10-digit Indian mobile number"
                             value={profileData.phone}
-                            onChange={(e) =>
-                              setProfileData({
-                                ...profileData,
-                                phone: e.target.value,
-                              })
-                            }
+                            aria-invalid={Boolean(profileErrors.phone)}
+                            aria-describedby={profileErrors.phone ? "profile-phone-error" : undefined}
+                            onChange={(e) => {
+                              const digits = e.target.value.replace(/\\D/g, "").slice(0, 10);
+                              setProfileData((prev) => ({
+                                ...prev,
+                                phone: digits,
+                              }));
+                              setProfileErrors((prev) => ({ ...prev, phone: "" }));
+                            }}
                           />
+                          {profileErrors.phone && (
+                            <p id="profile-phone-error" role="alert" className="mt-2 text-xs font-semibold text-red-400">
+                              {profileErrors.phone}
+                            </p>
+                          )}
                         </div>
                         <div className="input-field">
                           <label>State</label>
