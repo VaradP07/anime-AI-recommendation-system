@@ -368,3 +368,12 @@ export const getSavedMovies = async () => {
     throw error;
   }
 };
+export const resetPassword = async (email) => {
+  const normalizedEmail = email.trim();
+
+  if (!normalizedEmail) {
+    throw new Error("Please enter your email address.");
+  }
+
+  return sendPasswordResetEmail(auth, normalizedEmail);
+};
